@@ -54,7 +54,12 @@ export default async function CalendarPage({
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Calendar</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">Calendar</h1>
+        <Link className="rounded-md bg-black px-4 py-2 text-sm text-white" href="/bookings/new">
+          Add booking
+        </Link>
+      </div>
 
       <TodayPanel
         today={today}

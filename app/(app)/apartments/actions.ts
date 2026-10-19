@@ -10,8 +10,11 @@ import {
 import { syncFeed } from "@/lib/sync";
 
 export type FormState =
-  | { error?: string; fieldErrors?: Record<string, string[] | undefined>; ok?: boolean }
+  | { error?: string; fieldErrors?: Record<string, string[] | undefined>; ok?: boolean; submitted?: Record<string, string> }
   | undefined;
+
+const echo = (fd: FormData): Record<string, string> =>
+  Object.fromEntries([...fd.entries()].filter(([, v]) => typeof v === "string")) as Record<string, string>;
 
 function apartmentData(formData: FormData) {
   const parsed = apartmentSchema.safeParse(Object.fromEntries(formData));
@@ -30,8 +33,9 @@ function apartmentData(formData: FormData) {
 
 export async function createApartment(_prev: FormState, formData: FormData): Promise<FormState> {
   const session = await requireOwner();
+  const submitted = echo(formData);
   const r = apartmentData(formData);
-  if (!r.data) return r.state;
+  if (!r.data) return { ...r.state, submitted };
   const apartment = await prisma.apartment.create({ data: { ...r.data, ownerId: session.user.id } });
   revalidatePath("/apartments");
   redirect(`/apartments/${apartment.id}`);
@@ -39,8 +43,9 @@ export async function createApartment(_prev: FormState, formData: FormData): Pro
 
 export async function updateApartment(id: string, _prev: FormState, formData: FormData): Promise<FormState> {
   const session = await requireOwner();
+  const submitted = echo(formData);
   const r = apartmentData(formData);
-  if (!r.data) return r.state;
+  if (!r.data) return { ...r.state, submitted };
   const { count } = await prisma.apartment.updateMany({
     where: { id, ownerId: session.user.id }, // ownership enforced in the query
     data: r.data,
@@ -48,7 +53,7 @@ export async function updateApartment(id: string, _prev: FormState, formData: Fo
   if (count === 0) notFound();
   revalidatePath(`/apartments/${id}`);
   revalidatePath("/apartments");
-  return { ok: true };
+  return { ok: true, submitted };
 }
 
 export async function deleteApartment(id: string): Promise<void> {
@@ -61,17 +66,18 @@ export async function deleteApartment(id: string): Promise<void> {
 
 export async function addFeed(apartmentId: string, _prev: FormState, formData: FormData): Promise<FormState> {
   const session = await requireOwner();
+  const submitted = echo(formData);
   const apartment = await prisma.apartment.findFirst({
     where: { id: apartmentId, ownerId: session.user.id },
     include: { _count: { select: { feeds: true } } },
   });
   if (!apartment) notFound();
-  if (apartment._count.feeds >= 5) return { error: "Maximum 5 calendar links per apartment." };
+  if (apartment._count.feeds >= 5) return { error: "Maximum 5 calendar links per apartment.", submitted };
 
   const parsed = feedSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) return { fieldErrors: parsed.error.flatten().fieldErrors };
+  if (!parsed.success) return { fieldErrors: parsed.error.flatten().fieldErrors, submitted };
   if (!isSafeFeedUrl(parsed.data.icalUrl)) {
-    return { fieldErrors: { icalUrl: ["Use the https calendar link from Airbnb or Booking.com."] } };
+    return { fieldErrors: { icalUrl: ["Use the https calendar link from Airbnb or Booking.com."] }, submitted };
   }
   const feed = await prisma.calendarFeed.create({ data: { apartmentId, ...parsed.data } });
   revalidatePath(`/apartments/${apartmentId}`);
@@ -79,9 +85,9 @@ export async function addFeed(apartmentId: string, _prev: FormState, formData: F
   // Run initial sync immediately
   const r = await syncFeed(feed.id);
   if (!r.ok) {
-    return { error: `Saved, but the first sync failed: ${r.error ?? "Unknown error"}` };
+    return { error: `Saved, but the first sync failed: ${r.error ?? "Unknown error"}`, submitted };
   }
-  return { ok: true };
+  return { ok: true, submitted };
 }
 
 export async function removeFeed(feedId: string, apartmentId: string): Promise<void> {

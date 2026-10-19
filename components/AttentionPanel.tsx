@@ -43,6 +43,14 @@ export function AttentionPanel({
                     {SOURCE_LABEL[d.b.source]} booking overlap {formatYmd(d.overlapFrom)} to{" "}
                     {formatYmd(d.overlapTo)}
                   </Link>
+                  <div className="ml-4 flex gap-2">
+                    <Link href={`/bookings/${d.a.id}`} className="text-xs text-blue-600 underline">
+                      Open {SOURCE_LABEL[d.a.source]}
+                    </Link>
+                    <Link href={`/bookings/${d.b.id}`} className="text-xs text-blue-600 underline">
+                      Open {SOURCE_LABEL[d.b.source]}
+                    </Link>
+                  </div>
                 </li>
               ))}
               {doubles.length > 5 && (
@@ -107,7 +115,7 @@ export function AttentionPanel({
               {missing.slice(0, 5).map((s) => (
                 <li key={s.id} className="text-sm">
                   <Link
-                    href={`/calendar?from=${addDays(s.inYmd, -1)}`}
+                    href={`/bookings/${s.id}#guest`}
                     className="text-amber-700 underline"
                   >
                     {apartmentNames[s.apartmentId]}: arrival {formatYmd(s.inYmd)} (

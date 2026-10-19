@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import type { BarVM, RowVM } from "@/lib/calendar-view";
 import { SOURCE_LABEL, SOURCE_LETTER } from "@/lib/calendar-view";
 import { formatYmd, weekday } from "@/lib/dates";
@@ -202,12 +203,23 @@ export function Timeline({
                 Dates closed on the platform. They are not available to sell.
               </p>
             )}
-            <button
-              className="rounded-md bg-black px-3 py-2 text-sm text-white"
-              onClick={() => setSelected(null)}
-            >
-              Close
-            </button>
+            <div className="flex gap-2">
+              {!selected.isBlock && (
+                <Link
+                  href={`/bookings/${selected.id}`}
+                  className="flex-1 rounded-md bg-black px-3 py-2 text-center text-sm text-white"
+                  onClick={() => setSelected(null)}
+                >
+                  Open booking
+                </Link>
+              )}
+              <button
+                className="rounded-md border px-3 py-2 text-sm"
+                onClick={() => setSelected(null)}
+              >
+                Close
+              </button>
+            </div>
           </div>
         )}
       </dialog>
