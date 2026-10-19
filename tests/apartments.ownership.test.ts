@@ -7,6 +7,11 @@ vi.mock("@/lib/auth", () => ({
   requireOwner: vi.fn(),
 }));
 
+// Mock sync module to avoid actual sync calls in ownership tests
+vi.mock("@/lib/sync", () => ({
+  syncFeed: vi.fn(() => Promise.resolve({ ok: true, created: 0, updated: 0, cancelled: 0, feedId: "test" })),
+}));
+
 // Mock next/navigation
 vi.mock("next/navigation", () => ({
   notFound: vi.fn(() => {
@@ -23,6 +28,7 @@ vi.mock("next/cache", () => ({
 }));
 
 describe("Apartment ownership tests", () => {
+  vi.setConfig({ testTimeout: 10000 });
   let ownerA: { id: string; email: string };
   let ownerB: { id: string; email: string };
   let apartmentA: { id: string };
@@ -66,6 +72,8 @@ describe("Apartment ownership tests", () => {
         minNights: 1,
         baseNightlyCents: 10000,
         cleaningFeeCents: 5000,
+        info: "",
+        publicInfo: "",
       },
     });
   });

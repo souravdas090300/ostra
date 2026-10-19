@@ -29,7 +29,7 @@ export default async function ApartmentPage({ params }: { params: Promise<{ id: 
         }}
       />
       <FeedManager apartmentId={a.id} feeds={a.feeds.map((f) => ({
-        id: f.id, source: f.source, icalUrl: f.icalUrl, lastSyncAt: f.lastSyncAt?.toISOString() ?? null, lastError: f.lastError,
+        id: f.id, source: f.source, icalUrl: f.icalUrl, lastSyncAt: f.lastSyncAt?.toISOString() ?? null, lastSuccessAt: f.lastSuccessAt?.toISOString() ?? null, lastError: f.lastError,
       }))} />
       <form action={deleteApartment.bind(null, a.id)}>
         <DeleteButton label="Delete this apartment and all its bookings" />

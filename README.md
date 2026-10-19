@@ -72,10 +72,16 @@ This project is configured for deployment on Vercel with Neon PostgreSQL.
      - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM` (if using WhatsApp)
      - `CRON_SECRET` (generate with `openssl rand -base64 32`)
      - `APP_URL` (your Vercel app URL)
+     - `TZ=UTC` (required for consistent date handling)
 4. Add a build step in Vercel settings:
    - Build Command: `npm run build`
    - Install Command: `npm install`
    - Post-install Command: `npx prisma generate && npx prisma migrate deploy`
+
+### Cron Jobs
+The project uses Vercel Cron Jobs (configured in `vercel.json`):
+- Calendar sync: Every 30 minutes (`*/30 * * * *`)
+- Scheduled messages: Every 10 minutes (`*/10 * * * *`)
 
 ### Note
 - Local development uses SQLite for simplicity

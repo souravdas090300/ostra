@@ -53,11 +53,13 @@ model CalendarFeed {
   source     String   // AIRBNB, BOOKING_COM, DIRECT
   icalUrl    String
   lastSyncAt DateTime?
+  lastSuccessAt DateTime?
   lastError  String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
   apartment  Apartment @relation(fields: [apartmentId], references: [id], onDelete: Cascade)
+  bookings   Booking[]
 
   @@index([apartmentId])
 }
@@ -73,6 +75,9 @@ model Booking {
   guestName    String?
   guestPhone   String?
   guestLanguage String? // ISO 639-1 code
+  isBlock      Boolean  @default(false)  // host-blocked dates, not a guest stay
+  calendarFeedId String?
+  calendarFeed CalendarFeed? @relation(fields: [calendarFeedId], references: [id], onDelete: SetNull)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -81,4 +86,5 @@ model Booking {
   @@unique([apartmentId, externalUid])
   @@index([apartmentId])
   @@index([externalUid])
+  @@index([calendarFeedId])
 }

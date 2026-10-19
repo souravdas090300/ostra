@@ -7,6 +7,7 @@ import { requireOwner } from "@/lib/auth";
 import {
   apartmentSchema, feedSchema, settingsSchema, isSafeFeedUrl, toCents,
 } from "@/lib/validation";
+import { syncFeed } from "@/lib/sync";
 
 export type FormState =
   | { error?: string; fieldErrors?: Record<string, string[] | undefined>; ok?: boolean }
@@ -72,16 +73,30 @@ export async function addFeed(apartmentId: string, _prev: FormState, formData: F
   if (!isSafeFeedUrl(parsed.data.icalUrl)) {
     return { fieldErrors: { icalUrl: ["Use the https calendar link from Airbnb or Booking.com."] } };
   }
-  await prisma.calendarFeed.create({ data: { apartmentId, ...parsed.data } });
+  const feed = await prisma.calendarFeed.create({ data: { apartmentId, ...parsed.data } });
   revalidatePath(`/apartments/${apartmentId}`);
+
+  // Run initial sync immediately
+  const r = await syncFeed(feed.id);
+  if (!r.ok) {
+    return { error: `Saved, but the first sync failed: ${r.error ?? "Unknown error"}` };
+  }
   return { ok: true };
 }
 
 export async function removeFeed(feedId: string, apartmentId: string): Promise<void> {
   const session = await requireOwner();
-  await prisma.calendarFeed.deleteMany({
+  const feed = await prisma.calendarFeed.findFirst({
     where: { id: feedId, apartment: { ownerId: session.user.id } },
   });
+  if (!feed) return;
+  await prisma.$transaction([
+    prisma.booking.updateMany({
+      where: { calendarFeedId: feed.id, status: "CONFIRMED", checkOut: { gt: new Date() } },
+      data: { status: "CANCELLED" },
+    }),
+    prisma.calendarFeed.delete({ where: { id: feed.id } }), // bookings keep history (SetNull)
+  ]);
   revalidatePath(`/apartments/${apartmentId}`);
 }
 
@@ -92,4 +107,21 @@ export async function updateSettings(_prev: FormState, formData: FormData): Prom
   await prisma.owner.update({ where: { id: session.user.id }, data: parsed.data });
   revalidatePath("/settings");
   return { ok: true };
+}
+
+export async function syncFeedNow(feedId: string): Promise<{ ok: boolean; message: string }> {
+  const owner = await requireOwner();
+  const feed = await prisma.calendarFeed.findFirst({
+    where: { id: feedId, apartment: { ownerId: owner.user.id } },
+  });
+  if (!feed) notFound();
+  if (feed.lastSyncAt && Date.now() - feed.lastSyncAt.getTime() < 60_000) {
+    return { ok: false, message: "Synced less than a minute ago." };
+  }
+  const r = await syncFeed(feedId);
+  const updatedFeed = await prisma.calendarFeed.findUnique({ where: { id: feedId } });
+  revalidatePath(`/apartments/${updatedFeed?.apartmentId ?? feed.apartmentId}`);
+  return r.ok
+    ? { ok: true, message: `Done: ${r.created} new, ${r.updated} changed, ${r.cancelled} cancelled.` }
+    : { ok: false, message: r.error ?? "Sync failed." };
 }
