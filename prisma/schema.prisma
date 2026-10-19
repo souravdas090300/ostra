@@ -11,29 +11,38 @@ datasource db {
 }
 
 model Owner {
-  id           String      @id @default(cuid())
-  email        String      @unique
-  passwordHash String
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  id                  String      @id @default(cuid())
+  email               String      @unique
+  passwordHash        String
+  hostLanguage        String      @default("en")
+  defaultGuestLanguage String     @default("en")
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
 
-  apartments   Apartment[]
+  apartments          Apartment[]
 }
 
 model Apartment {
-  id             String   @id @default(cuid())
-  ownerId        String
-  name           String
-  address        String
-  checkInTime    String   // Format: "14:00"
-  checkOutTime   String   // Format: "11:00"
-  info           String   @default("")
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id               String   @id @default(cuid())
+  ownerId          String
+  name             String
+  address          String
+  checkInTime      String   // Format: "14:00"
+  checkOutTime     String   // Format: "11:00"
+  info             String   @default("")
+  publicInfo       String   @default("")
+  maxGuests        Int      @default(2)
+  bedrooms         Int      @default(1)
+  baseNightlyCents Int      @default(0)
+  cleaningFeeCents Int      @default(0)
+  minNights        Int      @default(1)
+  icalExportToken  String   @unique @default(cuid())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  owner          Owner    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  feeds          CalendarFeed[]
-  bookings       Booking[]
+  owner            Owner    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  feeds            CalendarFeed[]
+  bookings         Booking[]
 
   @@index([ownerId])
 }
@@ -54,19 +63,20 @@ model CalendarFeed {
 }
 
 model Booking {
-  id          String   @id @default(cuid())
-  apartmentId String
-  externalUid String?  // For synced bookings from iCal feeds
-  source      String   // AIRBNB, BOOKING_COM, DIRECT
-  status      String   @default("CONFIRMED") // CONFIRMED, CANCELLED
-  checkIn     DateTime
-  checkOut    DateTime
-  guestName   String?
-  guestPhone  String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(cuid())
+  apartmentId  String
+  externalUid  String?  // For synced bookings from iCal feeds
+  source       String   // AIRBNB, BOOKING_COM, DIRECT
+  status       String   @default("CONFIRMED") // CONFIRMED, CANCELLED
+  checkIn      DateTime
+  checkOut     DateTime
+  guestName    String?
+  guestPhone   String?
+  guestLanguage String? // ISO 639-1 code
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  apartment   Apartment @relation(fields: [apartmentId], references: [id], onDelete: Cascade)
+  apartment    Apartment @relation(fields: [apartmentId], references: [id], onDelete: Cascade)
 
   @@unique([apartmentId, externalUid])
   @@index([apartmentId])
