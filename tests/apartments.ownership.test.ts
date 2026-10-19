@@ -35,6 +35,7 @@ describe("Apartment ownership tests", () => {
 
   beforeEach(async () => {
     // Clean up database
+    await prisma.booking.deleteMany();
     await prisma.calendarFeed.deleteMany();
     await prisma.apartment.deleteMany();
     await prisma.owner.deleteMany();
