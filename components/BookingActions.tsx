@@ -10,7 +10,10 @@ type Props = {
 };
 
 export function BookingActions({ bookingId, source, status }: Props) {
-  const [cancelState, cancelAction, cancelPending] = useActionState(cancelDirectBooking.bind(null, bookingId), undefined);
+  const [cancelState, cancelAction, cancelPending] = useActionState(
+    async () => cancelDirectBooking(bookingId),
+    undefined
+  );
   const [restoreState, restoreAction, restorePending] = useActionState(
     restoreDirectBooking.bind(null, bookingId),
     undefined
@@ -64,7 +67,7 @@ export function BookingActions({ bookingId, source, status }: Props) {
       <button
         onClick={() => {
           if (window.confirm("Cancel this booking? Guests keep their history in Ostra, but no more automatic messages will be sent.")) {
-            cancelAction(new FormData());
+            cancelAction();
           }
         }}
         disabled={cancelPending}

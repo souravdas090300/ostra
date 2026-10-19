@@ -24,6 +24,7 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.135.0",
     "@neon/config": "^1.9.2",
     "@neon/env": "^1.6.3",
     "@prisma/client": "^5.22.0",
@@ -37,6 +38,7 @@
     "prisma": "^5.22.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "twilio": "^6.2.0",
     "undici": "^8.12.2",
     "zod": "^4.6.7"
   },

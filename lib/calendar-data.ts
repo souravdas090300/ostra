@@ -12,6 +12,8 @@ const select = {
   checkOut: true,
   guestName: true,
   guestPhone: true,
+  optedInAt: true,
+  optedOutAt: true,
 } as const;
 
 const toStay = (b: {
@@ -23,6 +25,8 @@ const toStay = (b: {
   checkOut: Date;
   guestName: string | null;
   guestPhone: string | null;
+  optedInAt: Date | null;
+  optedOutAt: Date | null;
 }): Stay => ({
   ...b,
   source: b.source as Stay["source"],
@@ -49,6 +53,106 @@ export async function loadStays(
   return rows.map(toStay);
 }
 
+export async function loadMessageIssues(ownerId: string) {
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const failedMessages = await prisma.scheduledMessage.findMany({
+    where: {
+      status: "FAILED",
+      createdAt: { gte: sevenDaysAgo },
+      booking: {
+        apartment: { ownerId },
+      },
+    },
+    include: {
+      booking: {
+        select: {
+          apartmentId: true,
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return failedMessages.map((m) => ({
+    bookingId: m.bookingId,
+    apartmentId: m.booking.apartmentId,
+    type: m.type,
+    reason: m.lastError || "Unknown error",
+    createdAt: m.createdAt,
+  }));
+}
+
+export async function loadDeliveryIssues(ownerId: string) {
+  const deliveryIssues = await prisma.message.findMany({
+    where: {
+      deliveryStatus: { in: ["failed", "undelivered"] },
+      booking: {
+        apartment: { ownerId },
+      },
+    },
+    include: {
+      booking: {
+        select: {
+          apartmentId: true,
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return deliveryIssues.map((m) => ({
+    bookingId: m.bookingId,
+    apartmentId: m.booking.apartmentId,
+    deliveryStatus: m.deliveryStatus ?? "unknown",
+    createdAt: m.createdAt,
+  }));
+}
+
+export async function loadSkippedForNoTemplate(ownerId: string) {
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const skipped = await prisma.scheduledMessage.findMany({
+    where: {
+      status: "SKIPPED",
+      skipReason: { contains: "No approved template" },
+      createdAt: { gte: sevenDaysAgo },
+      booking: {
+        apartment: { ownerId },
+      },
+    },
+    include: {
+      booking: {
+        select: {
+          apartmentId: true,
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  // Group by language to show once per language
+  const byLanguage = new Map<string, { language: string; count: number; apartmentIds: Set<string> }>();
+  for (const m of skipped) {
+    const lang = m.language || "unknown";
+    const existing = byLanguage.get(lang);
+    if (existing) {
+      existing.count++;
+      existing.apartmentIds.add(m.booking.apartmentId);
+    } else {
+      byLanguage.set(lang, {
+        language: lang,
+        count: 1,
+        apartmentIds: new Set([m.booking.apartmentId]),
+      });
+    }
+  }
+
+  return Array.from(byLanguage.entries()).map(([language, data]) => ({
+    language,
+    count: data.count,
+    apartmentIds: Array.from(data.apartmentIds),
+  }));
+}
+
 export async function loadCalendarData(
   ownerId: string,
   from: string,
@@ -56,7 +160,7 @@ export async function loadCalendarData(
   today: string
 ) {
   const to = addDays(from, days);
-  const [apartments, viewStays, upcomingStays, feeds] = await Promise.all([
+  const [apartments, viewStays, upcomingStays, feeds, messageIssues, deliveryIssues, skippedForNoTemplate] = await Promise.all([
     prisma.apartment.findMany({
       where: { ownerId },
       orderBy: { name: "asc" },
@@ -76,6 +180,9 @@ export async function loadCalendarData(
         apartment: { select: { name: true } },
       },
     }),
+    loadMessageIssues(ownerId),
+    loadDeliveryIssues(ownerId),
+    loadSkippedForNoTemplate(ownerId),
   ]);
   return {
     apartments,
@@ -90,5 +197,8 @@ export async function loadCalendarData(
       lastSuccessAt: f.lastSuccessAt,
       lastError: f.lastError,
     })),
+    messageIssues,
+    deliveryIssues,
+    skippedForNoTemplate,
   };
 }

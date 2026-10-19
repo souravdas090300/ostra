@@ -6,7 +6,7 @@ vi.mock("@/lib/sync", () => ({
   syncAllFeeds: vi.fn(() => Promise.resolve([])),
 }));
 
-describe("cron endpoint", () => {
+describe("cron endpoint (Phase 3)", () => {
   const originalEnv = process.env;
 
   beforeEach(() => {

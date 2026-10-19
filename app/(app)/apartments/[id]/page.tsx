@@ -25,7 +25,7 @@ export default async function ApartmentPage({ params }: { params: Promise<{ id: 
           name: a.name, address: a.address, checkInTime: a.checkInTime, checkOutTime: a.checkOutTime,
           maxGuests: a.maxGuests, bedrooms: a.bedrooms, minNights: a.minNights,
           baseNightlyEuros: a.baseNightlyCents / 100, cleaningFeeEuros: a.cleaningFeeCents / 100,
-          info: a.info, publicInfo: a.publicInfo,
+          info: a.info, publicInfo: a.publicInfo, reviewUrl: a.reviewUrl ?? "",
         }}
       />
       <FeedManager apartmentId={a.id} feeds={a.feeds.map((f) => ({

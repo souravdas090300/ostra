@@ -16,10 +16,12 @@ model Owner {
   passwordHash        String
   hostLanguage        String      @default("en")
   defaultGuestLanguage String     @default("en")
+  fallbackLanguage    String      @default("en")
   createdAt           DateTime    @default(now())
   updatedAt           DateTime    @updatedAt
 
   apartments          Apartment[]
+  templates           MessageTemplate[]
 }
 
 model Apartment {
@@ -37,6 +39,7 @@ model Apartment {
   cleaningFeeCents Int      @default(0)
   minNights        Int      @default(1)
   icalExportToken  String   @unique @default(cuid())
+  reviewUrl        String?  // https link where guests leave a review
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -79,15 +82,88 @@ model Booking {
   notes        String?  // private notes for the host
   isBlock      Boolean  @default(false)  // host-blocked dates, not a guest stay
   messagesPaused Boolean @default(false)    // host paused automatic messages (used in Phase 6)
+  optedInAt    DateTime?
+  optedOutAt   DateTime?
   calendarFeedId String?
   calendarFeed CalendarFeed? @relation(fields: [calendarFeedId], references: [id], onDelete: SetNull)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   apartment    Apartment @relation(fields: [apartmentId], references: [id], onDelete: Cascade)
+  messages     Message[]
+  scheduled    ScheduledMessage[]
 
   @@unique([apartmentId, externalUid])
   @@index([apartmentId])
   @@index([externalUid])
   @@index([calendarFeedId])
+}
+
+model Message {
+  id                  String   @id @default(cuid())
+  bookingId           String
+  booking             Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  direction           String   // INBOUND, OUTBOUND
+  body                String
+  escalated           Boolean  @default(false)
+  twilioSid           String?  @unique
+  deliveryStatus      String?  // queued | sent | delivered | read | failed | undelivered | dry-run
+  errorCode           Int?
+  scheduledMessageId  String?  @unique
+  createdAt           DateTime @default(now())
+
+  @@index([bookingId])
+}
+
+model ScheduledMessage {
+  id              String   @id @default(cuid())
+  bookingId       String
+  booking         Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  type            String   // PRE_ARRIVAL, CHECK_IN, CHECK_OUT, REVIEW_REQUEST
+  sendAt          DateTime
+  status          String   @default("PENDING") // PENDING, SENDING, SENT, SKIPPED, FAILED, CANCELLED
+  attempts        Int      @default(0)
+  claimedAt       DateTime?
+  sentAt          DateTime?
+  lastError       String?
+  skipReason      String?
+  hostSkipped     Boolean  @default(false)
+  twilioSid       String?
+  language        String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([status, sendAt])
+  @@index([bookingId])
+}
+
+model MessageTemplate {
+  id        String              @id @default(cuid())
+  ownerId   String
+  owner     Owner               @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  type      String              // PRE_ARRIVAL, CHECK_IN, CHECK_OUT, REVIEW_REQUEST
+  body      String              // host's text, in the host's language, with {{variables}}
+  enabled   Boolean             @default(true)
+  translations TemplateTranslation[]
+  updatedAt DateTime            @updatedAt
+
+  @@unique([ownerId, type])
+  @@index([ownerId])
+}
+
+model TemplateTranslation {
+  id              String          @id @default(cuid())
+  templateId      String
+  template        MessageTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  language        String
+  body            String
+  sourceHash      String          // hash of the host's source text this was made from
+  editedByHost    Boolean         @default(false)
+  approval        String          @default("NONE") // NONE, PENDING, APPROVED, REJECTED
+  contentSid      String?         // Twilio Content SID (HX...)
+  rejectionReason String?
+  updatedAt       DateTime        @updatedAt
+
+  @@unique([templateId, language])
+  @@index([templateId])
 }

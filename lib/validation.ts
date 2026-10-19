@@ -15,6 +15,7 @@ export const apartmentSchema = z.object({
   cleaningFeeEuros: z.coerce.number().min(0).max(10000),
   info: z.string().max(20000),
   publicInfo: z.string().max(10000),
+  reviewUrl: z.string().url().max(500).optional().or(z.literal("")),
 });
 
 export const feedSchema = z.object({

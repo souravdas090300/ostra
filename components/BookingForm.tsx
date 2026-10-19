@@ -16,6 +16,7 @@ export type BookingValues = {
   guestLanguage: string;
   guests: string;
   notes: string;
+  guestOptIn: string;
 };
 
 type Props = {
@@ -37,11 +38,12 @@ export function BookingForm({
 }: Props) {
   const [state, formAction, pending] = useActionState(action, undefined);
   const v = (k: keyof BookingValues) => state?.submitted?.[k] ?? values[k]; // keep input after a failed submit
-  const e = state?.fieldErrors ?? {};
+  const fieldErrors = state?.fieldErrors ?? {};
   const [phone, setPhone] = useState(v("guestPhone"));
   const [language, setLanguage] = useState(v("guestLanguage"));
   const suggestion = phone && !language ? suggestLanguageFromPhone(phone) : null;
-  const err = (k: string) => e[k]?.map((m) => <p key={m} className="text-sm text-red-600">{m}</p>);
+  const err = (k: string) => fieldErrors[k]?.map((m: string) => <p key={m} className="text-sm text-red-600">{m}</p>);
+  const phoneOptedOut = fieldErrors["guestPhone"]?.some((m: string) => m.includes("opted out"));
 
   return (
     <form action={formAction} className="max-w-xl space-y-4">
@@ -114,6 +116,27 @@ export function BookingForm({
           <p className="text-sm text-amber-700">This looks like a landline. WhatsApp usually needs a mobile number.</p>
         )}
       </label>
+
+      {phone && (
+        <label className="flex items-start space-x-2">
+          <input
+            type="checkbox"
+            name="guestOptIn"
+            value="true"
+            defaultChecked={v("guestOptIn") === "true"}
+            disabled={phoneOptedOut}
+            className="mt-1 rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 disabled:opacity-50"
+          />
+          <span className="text-sm text-gray-700">
+            Guest agreed to receive messages on WhatsApp
+          </span>
+        </label>
+      )}
+      {phoneOptedOut && (
+        <p className="text-sm text-amber-700">
+          This number has opted out of messages. You cannot tick the box.
+        </p>
+      )}
 
       <label className="block">
         <span className="text-sm font-medium">Guest language</span>

@@ -13,6 +13,8 @@ export type Stay = {
   checkOut: Date;
   guestName: string | null;
   guestPhone: string | null;
+  optedInAt: Date | null;
+  optedOutAt: Date | null;
 };
 
 export type DoubleBooking = {
@@ -92,11 +94,18 @@ export function findTurnovers(stays: Stay[]): Turnover[] {
   return out;
 }
 
-/** Guest arrivals in the next N days that have no phone number, so automatic messages cannot send. */
+/** Guest arrivals in the next N days that have no phone number or no opt-in, so automatic messages cannot send. */
 export function findMissingContacts(stays: Stay[], today: string, withinDays = 7): Stay[] {
   const last = addDays(today, withinDays);
   return stays
-    .filter((s) => !s.isBlock && !s.guestPhone && s.inYmd >= today && s.inYmd <= last)
+    .filter(
+      (s) =>
+        !s.isBlock &&
+        !s.optedOutAt &&
+        s.inYmd >= today &&
+        s.inYmd <= last &&
+        (!s.guestPhone || !s.optedInAt),
+    )
     .sort((a, b) => a.inYmd.localeCompare(b.inYmd));
 }
 
