@@ -76,6 +76,8 @@ export default async function CalendarPage({
         messageIssues={data.messageIssues}
         deliveryIssues={data.deliveryIssues}
         skippedForNoTemplate={data.skippedForNoTemplate}
+        escalatedMessages={data.escalatedMessages}
+        unmatchedCount={data.unmatchedCount}
         now={now.toISOString()}
       />
 

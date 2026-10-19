@@ -26,6 +26,14 @@ type SkippedForNoTemplate = {
   apartmentIds: string[];
 };
 
+type EscalatedMessage = {
+  bookingId: string;
+  apartmentId: string;
+  urgent: boolean;
+  hostSummary: string;
+  createdAt: Date;
+};
+
 export function AttentionPanel({
   apartmentNames,
   doubles,
@@ -34,6 +42,8 @@ export function AttentionPanel({
   messageIssues,
   deliveryIssues,
   skippedForNoTemplate,
+  escalatedMessages,
+  unmatchedCount,
   now,
 }: {
   apartmentNames: Record<string, string>;
@@ -43,6 +53,8 @@ export function AttentionPanel({
   messageIssues: MessageIssue[];
   deliveryIssues: DeliveryIssue[];
   skippedForNoTemplate: SkippedForNoTemplate[];
+  escalatedMessages: EscalatedMessage[];
+  unmatchedCount: number;
   now: string;
 }) {
   const nowDate = new Date(now);
@@ -53,7 +65,9 @@ export function AttentionPanel({
     feedIssues.length === 0 &&
     messageIssues.length === 0 &&
     deliveryIssues.length === 0 &&
-    skippedForNoTemplate.length === 0
+    skippedForNoTemplate.length === 0 &&
+    escalatedMessages.length === 0 &&
+    unmatchedCount === 0
   ) {
     return null;
   }
@@ -221,20 +235,45 @@ export function AttentionPanel({
             <ul className="mt-2 space-y-1">
               {skippedForNoTemplate.slice(0, 5).map((s) => (
                 <li key={s.language} className="text-sm">
-                  <Link
-                    href="/settings/messages"
-                    className="text-amber-700 underline"
-                  >
+                  <Link href="/settings/messages" className="text-amber-700 underline">
                     {s.language}: {s.count} message{s.count !== 1 ? "s" : ""} skipped
                   </Link>
                 </li>
               ))}
               {skippedForNoTemplate.length > 5 && (
-                <li className="text-sm text-gray-500">
-                  and {skippedForNoTemplate.length - 5} more languages
-                </li>
+                <li className="text-sm text-gray-500">and {skippedForNoTemplate.length - 5} more languages</li>
               )}
             </ul>
+          </div>
+        )}
+
+        {/* Escalated guest messages */}
+        {escalatedMessages.length > 0 && (
+          <div>
+            <h3 className="text-sm font-medium text-red-800">Guest messages needing your attention</h3>
+            <ul className="mt-2 space-y-1">
+              {escalatedMessages.slice(0, 5).map((m) => (
+                <li key={m.bookingId} className="text-sm">
+                  <Link href={`/bookings/${m.bookingId}`} className="text-red-700 underline">
+                    {apartmentNames[m.apartmentId]}
+                    {m.urgent && <span className="ml-2 font-bold">URGENT</span>}: {m.hostSummary}
+                  </Link>
+                </li>
+              ))}
+              {escalatedMessages.length > 5 && (
+                <li className="text-sm text-gray-500">and {escalatedMessages.length - 5} more</li>
+              )}
+            </ul>
+          </div>
+        )}
+
+        {/* Messages from unknown numbers */}
+        {unmatchedCount > 0 && (
+          <div>
+            <h3 className="text-sm font-medium text-amber-800">Messages from numbers with no booking</h3>
+            <p className="mt-2 text-sm text-amber-700">
+              {unmatchedCount} message{unmatchedCount !== 1 ? "s" : ""} in the last 7 days
+            </p>
           </div>
         )}
       </div>

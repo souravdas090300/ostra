@@ -264,7 +264,68 @@ export default async function BookingDetailPage({
           {/* Message history section */}
           <div className="rounded-lg border bg-white p-4">
             <h3 className="text-lg font-semibold">Message history</h3>
-            <p className="mt-4 text-sm text-gray-600">No messages yet.</p>
+            {booking.messages.length === 0 ? (
+              <p className="mt-4 text-sm text-gray-600">No messages yet.</p>
+            ) : (
+              <div className="mt-4 space-y-3">
+                {booking.messages.map((m) => (
+                  <div key={m.id} className="rounded border p-3 text-sm">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">
+                          {m.author === "GUEST" && "Guest"}
+                          {m.author === "AI" && "Assistant"}
+                          {m.author === "HOST" && "Host"}
+                          {m.author === "SYSTEM" && "Automatic"}
+                        </span>
+                        {m.direction === "INBOUND" && <span className="text-gray-500">→</span>}
+                        {m.direction === "OUTBOUND" && <span className="text-gray-500">←</span>}
+                        {m.language && <span className="text-xs text-gray-500">({m.language})</span>}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {m.escalated && (
+                          <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                            Escalated
+                          </span>
+                        )}
+                        {m.urgent && (
+                          <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">
+                            Urgent
+                          </span>
+                        )}
+                        {m.hasMedia && (
+                          <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">
+                            Photo/Voice
+                          </span>
+                        )}
+                        {m.deliveryStatus && (
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                              m.deliveryStatus === "delivered" || m.deliveryStatus === "read"
+                                ? "bg-green-100 text-green-800"
+                                : m.deliveryStatus === "failed" || m.deliveryStatus === "undelivered"
+                                  ? "bg-red-100 text-red-800"
+                                  : "bg-gray-100 text-gray-800"
+                            }`}
+                          >
+                            {m.deliveryStatus}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <p className="mt-2 whitespace-pre-wrap" dir="auto">
+                      {m.body}
+                    </p>
+                    {m.escalated && m.hostSummary && (
+                      <p className="mt-2 text-xs text-gray-600">Summary for host: {m.hostSummary}</p>
+                    )}
+                    {m.escalated && m.escalationReason && (
+                      <p className="mt-1 text-xs text-gray-500">Reason: {m.escalationReason}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Cancel/Restore section */}
