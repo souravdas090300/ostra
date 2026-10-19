@@ -1,5 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { maltaLocalToUtc } from "../lib/time";
+import { addDays, todayMalta } from "../lib/dates";
 
 const prisma = new PrismaClient();
 
@@ -20,6 +22,18 @@ async function main() {
   });
 
   console.log(`Created owner: ${owner.email}`);
+
+  // Delete existing bookings and feeds for idempotency
+  await prisma.booking.deleteMany({
+    where: {
+      apartment: { ownerId: owner.id },
+    },
+  });
+  await prisma.calendarFeed.deleteMany({
+    where: {
+      apartment: { ownerId: owner.id },
+    },
+  });
 
   // Create 3 apartments
   const apartment1 = await prisma.apartment.upsert({
@@ -58,46 +72,78 @@ async function main() {
       ownerId: owner.id,
       name: "Mdina Old Town Studio",
       address: "78 St. Paul's Square, Mdina, Malta",
-      checkInTime: "16:00",
-      checkOutTime: "11:00",
+      checkInTime: "15:00", // Changed for tight turnover scenario
+      checkOutTime: "14:00", // Changed for tight turnover scenario
       info: `Check-in steps: Meet at the Mdina Gate, I'll escort you to the apartment.\n\nKey/lockbox: Keys handed over in person.\n\nWi-Fi: Network: MdinaHistoric, Password: SilentCity2024\n\nParking: Public parking outside Mdina walls (10 min walk).\n\nHouse rules: No smoking, respect the quiet atmosphere of Mdina.\n\nLocal tips: Visit the Mdina Cathedral. Try Fontanella Tea Garden for views.\n\nEmergency contact: Sarah at +356 5555 1234`,
     },
   });
 
   console.log(`Created 3 apartments`);
 
-  // Create sample bookings
-  const today = new Date();
-  const nextWeek = new Date(today);
-  nextWeek.setDate(nextWeek.getDate() + 7);
+  // Phase 4 test scenarios
+  const today = todayMalta();
+  const now = new Date();
 
-  const twoWeeks = new Date(today);
-  twoWeeks.setDate(twoWeeks.getDate() + 14);
+  // Double booking in apartment A: Airbnb stay today+3 .. today+6 and Booking.com stay today+5 .. today+8
+  await prisma.booking.create({
+    data: {
+      apartmentId: apartment1.id,
+      externalUid: "airbnb-double-1",
+      source: "AIRBNB",
+      status: "CONFIRMED",
+      checkIn: maltaLocalToUtc(addDays(today, 3), "15:00"),
+      checkOut: maltaLocalToUtc(addDays(today, 6), "11:00"),
+      guestName: "Alice Airbnb",
+    },
+  });
 
   await prisma.booking.create({
     data: {
       apartmentId: apartment1.id,
-      externalUid: "airbnb-booking-1",
-      source: "AIRBNB",
+      externalUid: "booking-com-double-1",
+      source: "BOOKING_COM",
       status: "CONFIRMED",
-      checkIn: nextWeek,
-      checkOut: twoWeeks,
-      guestName: "John Smith",
+      checkIn: maltaLocalToUtc(addDays(today, 5), "14:00"),
+      checkOut: maltaLocalToUtc(addDays(today, 8), "10:00"),
+      guestName: "Bob Booking.com",
     },
   });
 
-  const threeWeeks = new Date(today);
-  threeWeeks.setDate(threeWeeks.getDate() + 21);
+  // Same-day turnover (4 h gap) in apartment B: Airbnb today+1 .. today+4, direct today+4 .. today+7
+  await prisma.booking.create({
+    data: {
+      apartmentId: apartment2.id,
+      externalUid: "airbnb-turnover-1",
+      source: "AIRBNB",
+      status: "CONFIRMED",
+      checkIn: maltaLocalToUtc(addDays(today, 1), "14:00"),
+      checkOut: maltaLocalToUtc(addDays(today, 4), "10:00"),
+      guestName: "Charlie Airbnb",
+    },
+  });
 
   await prisma.booking.create({
     data: {
       apartmentId: apartment2.id,
-      externalUid: "booking-com-booking-1",
-      source: "BOOKING_COM",
+      source: "DIRECT",
       status: "CONFIRMED",
-      checkIn: twoWeeks,
-      checkOut: threeWeeks,
-      guestName: "Emma Johnson",
+      checkIn: maltaLocalToUtc(addDays(today, 4), "14:00"),
+      checkOut: maltaLocalToUtc(addDays(today, 7), "10:00"),
+      guestName: "Diana Direct",
+      guestPhone: "+356 1111 2222",
+    },
+  });
+
+  // Tight turnover (1 h gap) in apartment C: stays today-2 .. today+2 and today+2 .. today+5
+  await prisma.booking.create({
+    data: {
+      apartmentId: apartment3.id,
+      externalUid: "airbnb-tight-1",
+      source: "AIRBNB",
+      status: "CONFIRMED",
+      checkIn: maltaLocalToUtc(addDays(today, -2), "15:00"),
+      checkOut: maltaLocalToUtc(addDays(today, 2), "14:00"),
+      guestName: "Eve Airbnb",
     },
   });
 
@@ -106,15 +152,96 @@ async function main() {
       apartmentId: apartment3.id,
       source: "DIRECT",
       status: "CONFIRMED",
-      checkIn: new Date(today.getTime() + 2 * 24 * 60 * 60 * 1000),
-      checkOut: new Date(today.getTime() + 5 * 24 * 60 * 60 * 1000),
-      guestName: "Michael Brown",
-      guestPhone: "+356 7777 8888",
+      checkIn: maltaLocalToUtc(addDays(today, 2), "15:00"),
+      checkOut: maltaLocalToUtc(addDays(today, 5), "14:00"),
+      guestName: "Frank Direct",
+      guestPhone: "+356 3333 4444",
     },
   });
 
-  console.log(`Created sample bookings`);
+  // Block in apartment B: today+10 .. today+13
+  await prisma.booking.create({
+    data: {
+      apartmentId: apartment2.id,
+      externalUid: "block-1",
+      source: "AIRBNB",
+      status: "CONFIRMED",
+      checkIn: maltaLocalToUtc(addDays(today, 10), "14:00"),
+      checkOut: maltaLocalToUtc(addDays(today, 13), "10:00"),
+      isBlock: true,
+    },
+  });
+
+  // Mirrored block overlapping a booking in apartment C: block today+2 .. today+5 over the second stay
+  await prisma.booking.create({
+    data: {
+      apartmentId: apartment3.id,
+      externalUid: "block-mirrored-1",
+      source: "BOOKING_COM",
+      status: "CONFIRMED",
+      checkIn: maltaLocalToUtc(addDays(today, 2), "15:00"),
+      checkOut: maltaLocalToUtc(addDays(today, 5), "14:00"),
+      isBlock: true,
+    },
+  });
+
+  // Missing phone: one arrival in 3 days without guestPhone
+  await prisma.booking.create({
+    data: {
+      apartmentId: apartment1.id,
+      externalUid: "airbnb-missing-phone-1",
+      source: "AIRBNB",
+      status: "CONFIRMED",
+      checkIn: maltaLocalToUtc(addDays(today, 3), "15:00"),
+      checkOut: maltaLocalToUtc(addDays(today, 6), "11:00"),
+      guestName: "Grace No Phone",
+    },
+  });
+
+  // Stale feed: one feed with lastSuccessAt 5 hours ago
+  const fiveHoursAgo = new Date(now.getTime() - 5 * 60 * 60 * 1000);
+  await prisma.calendarFeed.create({
+    data: {
+      apartmentId: apartment1.id,
+      source: "AIRBNB",
+      icalUrl: "https://airbnb.com/stale.ics",
+      lastSyncAt: fiveHoursAgo,
+      lastSuccessAt: fiveHoursAgo,
+    },
+  });
+
+  // Feed with lastError set
+  await prisma.calendarFeed.create({
+    data: {
+      apartmentId: apartment2.id,
+      source: "BOOKING_COM",
+      icalUrl: "https://booking.com/error.ics",
+      lastSyncAt: new Date(),
+      lastError: "Network timeout",
+    },
+  });
+
+  // Feed never synced
+  await prisma.calendarFeed.create({
+    data: {
+      apartmentId: apartment3.id,
+      source: "AIRBNB",
+      icalUrl: "https://airbnb.com/never.ics",
+    },
+  });
+
+  console.log(`Created Phase 4 test scenarios`);
 }
+
+main()
+  .then(async () => {
+    await prisma.$disconnect();
+  })
+  .catch(async (e) => {
+    console.error(e);
+    await prisma.$disconnect();
+    process.exit(1);
+  });
 
 main()
   .then(async () => {
