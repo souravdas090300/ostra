@@ -1,0 +1,60 @@
+﻿# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Next.js
+.next/
+out/
+build/
+dist/
+
+# Environment files
+# ONLY .env.example should be committed
+# ALL other env files must be ignored for security
+.env
+.env.dev
+.env.prod
+!.env.example
+
+# Vercel
+.vercel
+
+# Database files - NEVER commit these
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+prisma/*.db
+prisma/*.db-journal
+dev.db
+
+# Logs and OS files
+*.log
+.DS_Store
+Thumbs.db
+
+# Generated files
+/app/generated/prisma
+*.tsbuildinfo
+
+# Development tooling (IDE, AI agents, Neon skills)
+.agents/
+.claude/
+.windsurf/
+
+# Neon CLI configuration
+.neon
+neon.ts
+skills-lock.json
+
+# Security - NEVER commit secrets or keys
+*.key
+*.pem
+*.p12
+*.pfx
+credentials.json
+service-account.json
+secrets/
+*.secret
+secrets.*

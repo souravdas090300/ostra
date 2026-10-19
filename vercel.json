@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/sync-calendars",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/send-scheduled",
+      "schedule": "*/10 * * * *"
+    }
+  ]
+}
