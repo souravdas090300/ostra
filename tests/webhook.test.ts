@@ -80,9 +80,16 @@ describe("twilio-status webhook", () => {
       direction: "OUTBOUND",
       body: "Test",
       escalated: false,
+      resolved: false,
       deliveryStatus: "queued",
       errorCode: null,
       scheduledMessageId: null,
+      author: "SYSTEM",
+      language: null,
+      hasMedia: false,
+      hostSummary: null,
+      escalationReason: null,
+      urgent: false,
     });
     vi.mocked(prisma.message.update).mockResolvedValue({
       id: "msg1",
@@ -92,9 +99,16 @@ describe("twilio-status webhook", () => {
       direction: "OUTBOUND",
       body: "Test",
       escalated: false,
+      resolved: false,
       deliveryStatus: "delivered",
       errorCode: null,
       scheduledMessageId: null,
+      author: "SYSTEM",
+      language: null,
+      hasMedia: false,
+      hostSummary: null,
+      escalationReason: null,
+      urgent: false,
     });
 
     const formData = new FormData();
@@ -128,9 +142,16 @@ describe("twilio-status webhook", () => {
       direction: "OUTBOUND",
       body: "Test",
       escalated: false,
+      resolved: false,
       deliveryStatus: "delivered",
       errorCode: null,
       scheduledMessageId: null,
+      author: "SYSTEM",
+      language: null,
+      hasMedia: false,
+      hostSummary: null,
+      escalationReason: null,
+      urgent: false,
     });
 
     const formData = new FormData();
@@ -158,9 +179,16 @@ describe("twilio-status webhook", () => {
       direction: "OUTBOUND",
       body: "Test",
       escalated: false,
+      resolved: false,
       deliveryStatus: "queued",
       errorCode: null,
       scheduledMessageId: null,
+      author: "SYSTEM",
+      language: null,
+      hasMedia: false,
+      hostSummary: null,
+      escalationReason: null,
+      urgent: false,
     });
     vi.mocked(prisma.message.update).mockResolvedValue({
       id: "msg1",
@@ -170,9 +198,16 @@ describe("twilio-status webhook", () => {
       direction: "OUTBOUND",
       body: "Test",
       escalated: false,
+      resolved: false,
       deliveryStatus: "failed",
       errorCode: 30001,
       scheduledMessageId: null,
+      author: "SYSTEM",
+      language: null,
+      hasMedia: false,
+      hostSummary: null,
+      escalationReason: null,
+      urgent: false,
     });
 
     const formData = new FormData();

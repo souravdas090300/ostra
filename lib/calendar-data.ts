@@ -153,6 +153,45 @@ export async function loadSkippedForNoTemplate(ownerId: string) {
   }));
 }
 
+export async function loadEscalatedMessages(ownerId: string) {
+  const escalated = await prisma.message.findMany({
+    where: {
+      escalated: true,
+      resolved: false,
+      booking: {
+        apartment: { ownerId },
+      },
+    },
+    include: {
+      booking: {
+        select: {
+          apartmentId: true,
+        },
+      },
+    },
+    orderBy: [{ urgent: "desc" }, { createdAt: "desc" }],
+  });
+
+  return escalated.map((m) => ({
+    bookingId: m.bookingId,
+    apartmentId: m.booking.apartmentId,
+    urgent: m.urgent,
+    hostSummary: m.hostSummary || "Guest message needs attention",
+    createdAt: m.createdAt,
+  }));
+}
+
+export async function loadUnmatchedCount(ownerId: string) {
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const count = await prisma.unmatchedMessage.count({
+    where: {
+      ownerId,
+      receivedAt: { gte: sevenDaysAgo },
+    },
+  });
+  return count;
+}
+
 export async function loadCalendarData(
   ownerId: string,
   from: string,
@@ -160,30 +199,33 @@ export async function loadCalendarData(
   today: string
 ) {
   const to = addDays(from, days);
-  const [apartments, viewStays, upcomingStays, feeds, messageIssues, deliveryIssues, skippedForNoTemplate] = await Promise.all([
-    prisma.apartment.findMany({
-      where: { ownerId },
-      orderBy: { name: "asc" },
-      select: { id: true, name: true },
-    }),
-    loadStays(ownerId, from, to),
-    loadStays(ownerId, addDays(today, -1), addDays(today, 90)), // attention window, independent of the view
-    prisma.calendarFeed.findMany({
-      where: { apartment: { ownerId } },
-      select: {
-        id: true,
-        apartmentId: true,
-        source: true,
-        lastSyncAt: true,
-        lastSuccessAt: true,
-        lastError: true,
-        apartment: { select: { name: true } },
-      },
-    }),
-    loadMessageIssues(ownerId),
-    loadDeliveryIssues(ownerId),
-    loadSkippedForNoTemplate(ownerId),
-  ]);
+  const [apartments, viewStays, upcomingStays, feeds, messageIssues, deliveryIssues, skippedForNoTemplate, escalatedMessages, unmatchedCount] =
+    await Promise.all([
+      prisma.apartment.findMany({
+        where: { ownerId },
+        orderBy: { name: "asc" },
+        select: { id: true, name: true },
+      }),
+      loadStays(ownerId, from, to),
+      loadStays(ownerId, addDays(today, -1), addDays(today, 90)), // attention window, independent of the view
+      prisma.calendarFeed.findMany({
+        where: { apartment: { ownerId } },
+        select: {
+          id: true,
+          apartmentId: true,
+          source: true,
+          lastSyncAt: true,
+          lastSuccessAt: true,
+          lastError: true,
+          apartment: { select: { name: true } },
+        },
+      }),
+      loadMessageIssues(ownerId),
+      loadDeliveryIssues(ownerId),
+      loadSkippedForNoTemplate(ownerId),
+      loadEscalatedMessages(ownerId),
+      loadUnmatchedCount(ownerId),
+    ]);
   return {
     apartments,
     viewStays,
@@ -200,5 +242,7 @@ export async function loadCalendarData(
     messageIssues,
     deliveryIssues,
     skippedForNoTemplate,
+    escalatedMessages,
+    unmatchedCount,
   };
 }

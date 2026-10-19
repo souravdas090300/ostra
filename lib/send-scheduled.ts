@@ -143,6 +143,7 @@ async function sendOne(id: string, now: Date, s: SendSummary) {
         data: {
           bookingId: b.id,
           direction: "OUTBOUND",
+          author: "SYSTEM",
           body: text,
           scheduledMessageId: id,
           twilioSid: sid,
