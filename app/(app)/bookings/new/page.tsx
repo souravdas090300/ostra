@@ -61,6 +61,7 @@ export default async function NewBookingPage({
           guestLanguage: "",
           guests: "",
           notes: "",
+          guestOptIn: "false",
         }}
         apartments={apartments}
         defaultGuestLanguageName={getLanguage(owner.user.defaultGuestLanguage)?.name ?? "English"}

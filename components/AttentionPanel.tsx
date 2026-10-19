@@ -5,22 +5,56 @@ import type { DoubleBooking } from "@/lib/conflicts";
 import type { Stay, SourceName } from "@/lib/conflicts";
 import type { FeedIssue } from "@/lib/feed-health";
 
+type MessageIssue = {
+  bookingId: string;
+  apartmentId: string;
+  type: string;
+  reason: string;
+  createdAt: Date;
+};
+
+type DeliveryIssue = {
+  bookingId: string;
+  apartmentId: string;
+  deliveryStatus: string | null;
+  createdAt: Date;
+};
+
+type SkippedForNoTemplate = {
+  language: string;
+  count: number;
+  apartmentIds: string[];
+};
+
 export function AttentionPanel({
   apartmentNames,
   doubles,
   missing,
   feedIssues,
+  messageIssues,
+  deliveryIssues,
+  skippedForNoTemplate,
   now,
 }: {
   apartmentNames: Record<string, string>;
   doubles: DoubleBooking[];
   missing: Stay[];
   feedIssues: FeedIssue[];
+  messageIssues: MessageIssue[];
+  deliveryIssues: DeliveryIssue[];
+  skippedForNoTemplate: SkippedForNoTemplate[];
   now: string;
 }) {
   const nowDate = new Date(now);
 
-  if (doubles.length === 0 && missing.length === 0 && feedIssues.length === 0) {
+  if (
+    doubles.length === 0 &&
+    missing.length === 0 &&
+    feedIssues.length === 0 &&
+    messageIssues.length === 0 &&
+    deliveryIssues.length === 0 &&
+    skippedForNoTemplate.length === 0
+  ) {
     return null;
   }
 
@@ -107,10 +141,10 @@ export function AttentionPanel({
           </div>
         )}
 
-        {/* Missing phone numbers */}
+        {/* Missing phone numbers or opt-in */}
         {missing.length > 0 && (
           <div>
-            <h3 className="text-sm font-medium text-amber-800">Missing phone numbers</h3>
+            <h3 className="text-sm font-medium text-amber-800">Missing phone numbers or opt-in</h3>
             <ul className="mt-2 space-y-1">
               {missing.slice(0, 5).map((s) => (
                 <li key={s.id} className="text-sm">
@@ -119,14 +153,85 @@ export function AttentionPanel({
                     className="text-amber-700 underline"
                   >
                     {apartmentNames[s.apartmentId]}: arrival {formatYmd(s.inYmd)} (
-                    {SOURCE_LABEL[s.source]}) has no phone number, so automatic messages will not
-                    send
+                    {SOURCE_LABEL[s.source]}) {s.guestPhone ? "guest has not agreed to WhatsApp messages" : "has no phone number"}
                   </Link>
                 </li>
               ))}
               {missing.length > 5 && (
                 <li className="text-sm text-gray-500">
                   and {missing.length - 5} more
+                </li>
+              )}
+            </ul>
+          </div>
+        )}
+
+        {/* Failed scheduled messages */}
+        {messageIssues.length > 0 && (
+          <div>
+            <h3 className="text-sm font-medium text-red-800">Failed scheduled messages</h3>
+            <ul className="mt-2 space-y-1">
+              {messageIssues.slice(0, 5).map((m) => (
+                <li key={`${m.bookingId}-${m.type}`} className="text-sm">
+                  <Link
+                    href={`/bookings/${m.bookingId}`}
+                    className="text-red-700 underline"
+                  >
+                    {apartmentNames[m.apartmentId]}: {m.type.replace(/_/g, " ")} - {m.reason}
+                  </Link>
+                </li>
+              ))}
+              {messageIssues.length > 5 && (
+                <li className="text-sm text-gray-500">
+                  and {messageIssues.length - 5} more
+                </li>
+              )}
+            </ul>
+          </div>
+        )}
+
+        {/* Messages with delivery failures */}
+        {deliveryIssues.length > 0 && (
+          <div>
+            <h3 className="text-sm font-medium text-red-800">Delivery failures</h3>
+            <ul className="mt-2 space-y-1">
+              {deliveryIssues.slice(0, 5).map((d) => (
+                <li key={`${d.bookingId}-${d.deliveryStatus}`} className="text-sm">
+                  <Link
+                    href={`/bookings/${d.bookingId}`}
+                    className="text-red-700 underline"
+                  >
+                    {apartmentNames[d.apartmentId]}: {d.deliveryStatus}
+                  </Link>
+                </li>
+              ))}
+              {deliveryIssues.length > 5 && (
+                <li className="text-sm text-gray-500">
+                  and {deliveryIssues.length - 5} more
+                </li>
+              )}
+            </ul>
+          </div>
+        )}
+
+        {/* Messages skipped for no approved template */}
+        {skippedForNoTemplate.length > 0 && (
+          <div>
+            <h3 className="text-sm font-medium text-amber-800">Messages skipped (no approved template)</h3>
+            <ul className="mt-2 space-y-1">
+              {skippedForNoTemplate.slice(0, 5).map((s) => (
+                <li key={s.language} className="text-sm">
+                  <Link
+                    href="/settings/messages"
+                    className="text-amber-700 underline"
+                  >
+                    {s.language}: {s.count} message{s.count !== 1 ? "s" : ""} skipped
+                  </Link>
+                </li>
+              ))}
+              {skippedForNoTemplate.length > 5 && (
+                <li className="text-sm text-gray-500">
+                  and {skippedForNoTemplate.length - 5} more languages
                 </li>
               )}
             </ul>

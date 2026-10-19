@@ -8,6 +8,7 @@ import {
   apartmentSchema, feedSchema, settingsSchema, isSafeFeedUrl, toCents,
 } from "@/lib/validation";
 import { syncFeed } from "@/lib/sync";
+import { rescheduleBookings } from "@/lib/schedule";
 
 export type FormState =
   | { error?: string; fieldErrors?: Record<string, string[] | undefined>; ok?: boolean; submitted?: Record<string, string> }
@@ -46,11 +47,36 @@ export async function updateApartment(id: string, _prev: FormState, formData: Fo
   const submitted = echo(formData);
   const r = apartmentData(formData);
   if (!r.data) return { ...r.state, submitted };
+
+  const existing = await prisma.apartment.findFirst({
+    where: { id, ownerId: session.user.id },
+    select: { reviewUrl: true },
+  });
+  if (!existing) notFound();
+
+  const reviewUrlChanged = r.data.reviewUrl !== existing.reviewUrl;
+
   const { count } = await prisma.apartment.updateMany({
     where: { id, ownerId: session.user.id }, // ownership enforced in the query
     data: r.data,
   });
   if (count === 0) notFound();
+
+  if (reviewUrlChanged) {
+    // Reschedule all future confirmed bookings for this apartment
+    const bookings = await prisma.booking.findMany({
+      where: {
+        apartmentId: id,
+        status: "CONFIRMED",
+        checkOut: { gt: new Date() },
+      },
+      select: { id: true },
+    });
+    if (bookings.length > 0) {
+      await rescheduleBookings(bookings.map((b) => b.id));
+    }
+  }
+
   revalidatePath(`/apartments/${id}`);
   revalidatePath("/apartments");
   return { ok: true, submitted };

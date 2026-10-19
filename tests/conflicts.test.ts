@@ -18,6 +18,8 @@ const baseStay = (id: string, apt: string, inYmd: string, outYmd: string): Stay 
   checkOut: new Date(`${outYmd}T11:00:00Z`),
   guestName: "Test Guest",
   guestPhone: "+356 1234 5678",
+  optedInAt: null,
+  optedOutAt: null,
 });
 
 describe("conflicts", () => {

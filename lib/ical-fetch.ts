@@ -1,5 +1,5 @@
-import dns from "node:dns";
-import net from "node:net";
+import dns from "dns";
+import net from "net";
 import { Agent, fetch, type Response } from "undici";
 import { isSafeFeedUrl } from "./validation";
 

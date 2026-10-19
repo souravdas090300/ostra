@@ -8,13 +8,13 @@ type Values = {
   name: string; address: string; checkInTime: string; checkOutTime: string;
   maxGuests: number; bedrooms: number; minNights: number;
   baseNightlyEuros: number; cleaningFeeEuros: number;
-  info: string; publicInfo: string;
+  info: string; publicInfo: string; reviewUrl: string;
 };
 
 export const EMPTY_APARTMENT: Values = {
   name: "", address: "", checkInTime: "15:00", checkOutTime: "11:00",
   maxGuests: 2, bedrooms: 1, minNights: 1, baseNightlyEuros: 0, cleaningFeeEuros: 0,
-  info: INFO_TEMPLATE, publicInfo: PUBLIC_INFO_TEMPLATE,
+  info: INFO_TEMPLATE, publicInfo: PUBLIC_INFO_TEMPLATE, reviewUrl: "",
 };
 
 function Field(props: {
@@ -77,6 +77,14 @@ export function ApartmentForm({
           className="mt-1 w-full rounded-md border px-3 py-2 font-mono text-sm" />
         {e.publicInfo?.map((m) => <p key={m} className="text-sm text-red-600">{m}</p>)}
       </label>
+
+      <Field
+        label="Review URL"
+        name="reviewUrl"
+        defaultValue={v("reviewUrl")}
+        errors={e.reviewUrl}
+        hint="https link where guests leave a review (Google, Airbnb, etc.)"
+      />
 
       {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
       {state?.ok && <p className="text-sm text-green-700">Saved.</p>}

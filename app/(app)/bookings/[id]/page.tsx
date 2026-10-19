@@ -10,7 +10,7 @@ import { formatPhone } from "@/lib/phone";
 import { BookingForm } from "@/components/BookingForm";
 import { PlatformBlockNotice } from "@/components/PlatformBlockNotice";
 import { BookingActions } from "@/components/BookingActions";
-import { updateBooking, setMessagesPaused } from "../actions";
+import { updateBooking, setMessagesPaused, skipScheduledMessage } from "../actions";
 
 export default async function BookingDetailPage({
   params,
@@ -27,6 +27,8 @@ export default async function BookingDetailPage({
     where: { id, apartment: { ownerId: owner.user.id } },
     include: {
       apartment: true,
+      scheduled: true,
+      messages: true,
     },
   });
 
@@ -188,6 +190,7 @@ export default async function BookingDetailPage({
                   guestLanguage: booking.guestLanguage ?? "",
                   guests: booking.guests?.toString() ?? "",
                   notes: booking.notes ?? "",
+                  guestOptIn: !!booking.optedInAt ? "true" : "",
                 }}
                 defaultGuestLanguageName={getLanguage(owner.user.defaultGuestLanguage)?.name ?? "English"}
                 submitLabel="Save"
@@ -207,7 +210,54 @@ export default async function BookingDetailPage({
                   {booking.messagesPaused ? "Resume automatic messages" : "Pause automatic messages"}
                 </button>
               </form>
-              <p className="text-sm text-gray-600">Scheduled messages will appear here.</p>
+              {booking.scheduled.length === 0 ? (
+                <p className="text-sm text-gray-600">No scheduled messages. Add a phone number and opt-in to enable.</p>
+              ) : (
+                <div className="space-y-2">
+                  {booking.scheduled.map((msg) => {
+                    const message = booking.messages.find((m) => m.scheduledMessageId === msg.id);
+                    return (
+                      <div key={msg.id} className="flex items-center justify-between rounded border p-3 text-sm">
+                        <div>
+                          <span className="font-medium">{msg.type.replace(/_/g, " ")}</span>
+                          <span className="ml-2 text-gray-600">
+                            {msg.status === "PENDING" && `Scheduled for ${new Date(msg.sendAt).toLocaleString()}`}
+                            {msg.status === "SENT" && `Sent ${new Date(msg.sentAt!).toLocaleString()}`}
+                            {msg.status === "SKIPPED" && `Skipped: ${msg.skipReason}`}
+                            {msg.status === "FAILED" && `Failed: ${msg.lastError}`}
+                            {msg.status === "CANCELLED" && "Cancelled"}
+                            {msg.status === "SENDING" && "Sending..."}
+                          </span>
+                          {msg.language && <span className="ml-2 text-xs text-gray-500">({msg.language})</span>}
+                          {message && message.deliveryStatus && (
+                            <span className="ml-2 text-xs">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                                message.deliveryStatus === "delivered" || message.deliveryStatus === "read"
+                                  ? "bg-green-100 text-green-800"
+                                  : message.deliveryStatus === "failed" || message.deliveryStatus === "undelivered"
+                                  ? "bg-red-100 text-red-800"
+                                  : "bg-gray-100 text-gray-800"
+                              }`}>
+                                {message.deliveryStatus}
+                              </span>
+                            </span>
+                          )}
+                        </div>
+                        {msg.status === "PENDING" && (
+                          <form action={skipScheduledMessage.bind(null, msg.id)}>
+                            <button
+                              type="submit"
+                              className="text-red-600 hover:text-red-900 text-sm"
+                            >
+                              Skip
+                            </button>
+                          </form>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
 

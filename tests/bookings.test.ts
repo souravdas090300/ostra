@@ -620,7 +620,7 @@ describe("booking actions (database)", () => {
 
     const { cancelDirectBooking } = await import("@/app/(app)/bookings/actions");
 
-    const result = await cancelDirectBooking(booking.id, undefined);
+    const result = await cancelDirectBooking(booking.id);
     expect(result?.error).toBeDefined();
     expect(result?.error).toContain("Cancel this booking on Airbnb");
 

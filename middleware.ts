@@ -4,8 +4,8 @@ import { NextResponse } from "next/server";
 export default auth((req) => {
   const { pathname } = req.nextUrl;
 
-  // Exclude cron endpoints from session check (they use CRON_SECRET instead)
-  if (pathname.startsWith("/api/cron/")) {
+  // Exclude cron and webhook endpoints from session check (they use their own auth)
+  if (pathname.startsWith("/api/cron/") || pathname.startsWith("/api/webhooks/")) {
     return NextResponse.next();
   }
 
