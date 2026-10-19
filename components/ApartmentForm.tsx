@@ -43,18 +43,19 @@ export function ApartmentForm({
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
   const e = state?.fieldErrors ?? {};
+  const v = (k: keyof Values) => state?.submitted?.[k] ?? values[k];
   return (
     <form action={formAction} className="space-y-4 max-w-2xl">
-      <Field label="Name" name="name" defaultValue={values.name} errors={e.name} />
-      <Field label="Address (private, shared only with booked guests)" name="address" defaultValue={values.address} errors={e.address} />
+      <Field label="Name" name="name" defaultValue={v("name")} errors={e.name} />
+      <Field label="Address (private, shared only with booked guests)" name="address" defaultValue={v("address")} errors={e.address} />
       <div className="grid grid-cols-2 gap-4">
-        <Field label="Check-in time" name="checkInTime" defaultValue={values.checkInTime} errors={e.checkInTime} hint="HH:MM" />
-        <Field label="Check-out time" name="checkOutTime" defaultValue={values.checkOutTime} errors={e.checkOutTime} hint="HH:MM" />
-        <Field label="Max guests" name="maxGuests" type="number" defaultValue={values.maxGuests} errors={e.maxGuests} />
-        <Field label="Bedrooms" name="bedrooms" type="number" defaultValue={values.bedrooms} errors={e.bedrooms} />
-        <Field label="Minimum nights" name="minNights" type="number" defaultValue={values.minNights} errors={e.minNights} />
-        <Field label="Base price per night (EUR)" name="baseNightlyEuros" type="number" step="0.01" defaultValue={values.baseNightlyEuros} errors={e.baseNightlyEuros} />
-        <Field label="Cleaning fee (EUR)" name="cleaningFeeEuros" type="number" step="0.01" defaultValue={values.cleaningFeeEuros} errors={e.cleaningFeeEuros} />
+        <Field label="Check-in time" name="checkInTime" defaultValue={v("checkInTime")} errors={e.checkInTime} hint="HH:MM" />
+        <Field label="Check-out time" name="checkOutTime" defaultValue={v("checkOutTime")} errors={e.checkOutTime} hint="HH:MM" />
+        <Field label="Max guests" name="maxGuests" type="number" defaultValue={v("maxGuests")} errors={e.maxGuests} />
+        <Field label="Bedrooms" name="bedrooms" type="number" defaultValue={v("bedrooms")} errors={e.bedrooms} />
+        <Field label="Minimum nights" name="minNights" type="number" defaultValue={v("minNights")} errors={e.minNights} />
+        <Field label="Base price per night (EUR)" name="baseNightlyEuros" type="number" step="0.01" defaultValue={v("baseNightlyEuros")} errors={e.baseNightlyEuros} />
+        <Field label="Cleaning fee (EUR)" name="cleaningFeeEuros" type="number" step="0.01" defaultValue={v("cleaningFeeEuros")} errors={e.cleaningFeeEuros} />
       </div>
 
       <label className="block">
@@ -62,7 +63,7 @@ export function ApartmentForm({
         <span className="block text-xs text-gray-500">
           Write in your own language. The assistant answers booked guests from this, in the guest&apos;s language.
         </span>
-        <textarea name="info" rows={18} defaultValue={values.info}
+        <textarea name="info" rows={18} defaultValue={v("info")}
           className="mt-1 w-full rounded-md border px-3 py-2 font-mono text-sm" />
         {e.info?.map((m) => <p key={m} className="text-sm text-red-600">{m}</p>)}
       </label>
@@ -72,7 +73,7 @@ export function ApartmentForm({
         <span className="block text-xs text-gray-500">
           Safe to share with anyone. No door codes, passwords or exact address.
         </span>
-        <textarea name="publicInfo" rows={10} defaultValue={values.publicInfo}
+        <textarea name="publicInfo" rows={10} defaultValue={v("publicInfo")}
           className="mt-1 w-full rounded-md border px-3 py-2 font-mono text-sm" />
         {e.publicInfo?.map((m) => <p key={m} className="text-sm text-red-600">{m}</p>)}
       </label>

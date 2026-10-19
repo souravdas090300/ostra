@@ -75,7 +75,10 @@ model Booking {
   guestName    String?
   guestPhone   String?
   guestLanguage String? // ISO 639-1 code
+  guests       Int?     // number of guests, if known
+  notes        String?  // private notes for the host
   isBlock      Boolean  @default(false)  // host-blocked dates, not a guest stay
+  messagesPaused Boolean @default(false)    // host paused automatic messages (used in Phase 6)
   calendarFeedId String?
   calendarFeed CalendarFeed? @relation(fields: [calendarFeedId], references: [id], onDelete: SetNull)
   createdAt    DateTime @default(now())

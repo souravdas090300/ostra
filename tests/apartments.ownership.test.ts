@@ -83,6 +83,7 @@ describe("Apartment ownership tests", () => {
     const { requireOwner } = await import("@/lib/auth");
     vi.mocked(requireOwner).mockResolvedValue({
       user: { id: ownerB.id, email: ownerB.email, hostLanguage: "en", defaultGuestLanguage: "en", name: "Owner B" },
+      expires: new Date().toISOString(),
     } as any);
 
     const { updateApartment } = await import("@/app/(app)/apartments/actions");
@@ -114,6 +115,7 @@ describe("Apartment ownership tests", () => {
     const { requireOwner } = await import("@/lib/auth");
     vi.mocked(requireOwner).mockResolvedValue({
       user: { id: ownerA.id, email: ownerA.email, hostLanguage: "en", defaultGuestLanguage: "en", name: "Owner A" },
+      expires: new Date().toISOString(),
     } as any);
 
     const { updateApartment } = await import("@/app/(app)/apartments/actions");
@@ -146,6 +148,7 @@ describe("Apartment ownership tests", () => {
     const { requireOwner } = await import("@/lib/auth");
     vi.mocked(requireOwner).mockResolvedValue({
       user: { id: ownerB.id, email: ownerB.email, hostLanguage: "en", defaultGuestLanguage: "en", name: "Owner B" },
+      expires: new Date().toISOString(),
     } as any);
 
     const { deleteApartment } = await import("@/app/(app)/apartments/actions");
@@ -163,6 +166,7 @@ describe("Apartment ownership tests", () => {
     const { requireOwner } = await import("@/lib/auth");
     vi.mocked(requireOwner).mockResolvedValue({
       user: { id: ownerA.id, email: ownerA.email, hostLanguage: "en", defaultGuestLanguage: "en", name: "Owner A" },
+      expires: new Date().toISOString(),
     } as any);
 
     const { deleteApartment } = await import("@/app/(app)/apartments/actions");
@@ -180,6 +184,7 @@ describe("Apartment ownership tests", () => {
     const { requireOwner } = await import("@/lib/auth");
     vi.mocked(requireOwner).mockResolvedValue({
       user: { id: ownerB.id, email: ownerB.email, hostLanguage: "en", defaultGuestLanguage: "en", name: "Owner B" },
+      expires: new Date().toISOString(),
     } as any);
 
     const { addFeed } = await import("@/app/(app)/apartments/actions");
@@ -201,6 +206,7 @@ describe("Apartment ownership tests", () => {
     const { requireOwner } = await import("@/lib/auth");
     vi.mocked(requireOwner).mockResolvedValue({
       user: { id: ownerA.id, email: ownerA.email, hostLanguage: "en", defaultGuestLanguage: "en", name: "Owner A" },
+      expires: new Date().toISOString(),
     } as any);
 
     const { addFeed } = await import("@/app/(app)/apartments/actions");
@@ -233,6 +239,7 @@ describe("Apartment ownership tests", () => {
     const { requireOwner } = await import("@/lib/auth");
     vi.mocked(requireOwner).mockResolvedValue({
       user: { id: ownerB.id, email: ownerB.email, hostLanguage: "en", defaultGuestLanguage: "en", name: "Owner B" },
+      expires: new Date().toISOString(),
     } as any);
 
     const { removeFeed } = await import("@/app/(app)/apartments/actions");
@@ -259,6 +266,7 @@ describe("Apartment ownership tests", () => {
     const { requireOwner } = await import("@/lib/auth");
     vi.mocked(requireOwner).mockResolvedValue({
       user: { id: ownerA.id, email: ownerA.email, hostLanguage: "en", defaultGuestLanguage: "en", name: "Owner A" },
+      expires: new Date().toISOString(),
     } as any);
 
     const { removeFeed } = await import("@/app/(app)/apartments/actions");
@@ -287,6 +295,7 @@ describe("Apartment ownership tests", () => {
     const { requireOwner } = await import("@/lib/auth");
     vi.mocked(requireOwner).mockResolvedValue({
       user: { id: ownerA.id, email: ownerA.email, hostLanguage: "en", defaultGuestLanguage: "en", name: "Owner A" },
+      expires: new Date().toISOString(),
     } as any);
 
     const { addFeed } = await import("@/app/(app)/apartments/actions");
@@ -303,6 +312,7 @@ describe("Apartment ownership tests", () => {
     const { requireOwner } = await import("@/lib/auth");
     vi.mocked(requireOwner).mockResolvedValue({
       user: { id: ownerA.id, email: ownerA.email, hostLanguage: "en", defaultGuestLanguage: "en", name: "Owner A" },
+      expires: new Date().toISOString(),
     } as any);
 
     const { addFeed } = await import("@/app/(app)/apartments/actions");
@@ -313,5 +323,35 @@ describe("Apartment ownership tests", () => {
 
     const result = await addFeed(apartmentA.id, undefined, formData);
     expect(result?.fieldErrors?.icalUrl).toBeDefined();
+  });
+
+  it("apartment form preserves typed values on validation error", async () => {
+    const { requireOwner } = await import("@/lib/auth");
+    vi.mocked(requireOwner).mockResolvedValue({
+      user: { id: ownerA.id, email: ownerA.email, hostLanguage: "en", defaultGuestLanguage: "en", name: "Owner A" },
+      expires: new Date().toISOString(),
+    } as any);
+
+    const { updateApartment } = await import("@/app/(app)/apartments/actions");
+
+    const formData = new FormData();
+    formData.set("name", "Typed Name");
+    formData.set("address", "Typed Address");
+    formData.set("checkInTime", "25:00"); // Invalid time
+    formData.set("checkOutTime", "11:00");
+    formData.set("maxGuests", "4");
+    formData.set("bedrooms", "2");
+    formData.set("minNights", "2");
+    formData.set("baseNightlyEuros", "150");
+    formData.set("cleaningFeeEuros", "75");
+    formData.set("info", "Typed info");
+    formData.set("publicInfo", "Typed public info");
+
+    const result = await updateApartment(apartmentA.id, undefined, formData);
+    expect(result?.ok).toBeUndefined();
+    expect(result?.fieldErrors?.checkInTime).toBeDefined();
+    expect(result?.submitted?.name).toBe("Typed Name");
+    expect(result?.submitted?.address).toBe("Typed Address");
+    expect(result?.submitted?.info).toBe("Typed info");
   });
 });

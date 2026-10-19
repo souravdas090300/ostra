@@ -33,6 +33,8 @@ export function FeedManager({ apartmentId, feeds }: { apartmentId: string; feeds
     return hoursSince > 3;
   };
 
+  const v = (k: string) => state?.submitted?.[k] ?? "";
+
   return (
     <section className="max-w-2xl space-y-3">
       <h2 className="font-semibold">Calendar links (iCal)</h2>
@@ -84,11 +86,11 @@ export function FeedManager({ apartmentId, feeds }: { apartmentId: string; feeds
         ))}
       </ul>
       <form action={formAction} className="space-y-2 rounded-md border p-3">
-        <select name="source" className="w-full rounded-md border px-3 py-2">
+        <select name="source" defaultValue={v("source")} className="w-full rounded-md border px-3 py-2">
           <option value="AIRBNB">Airbnb</option>
           <option value="BOOKING_COM">Booking.com</option>
         </select>
-        <input name="icalUrl" placeholder="https://..." className="w-full rounded-md border px-3 py-2" />
+        <input name="icalUrl" placeholder="https://..." defaultValue={v("icalUrl")} className="w-full rounded-md border px-3 py-2" />
         {state?.fieldErrors?.icalUrl?.map((m) => <p key={m} className="text-sm text-red-600">{m}</p>)}
         {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
         <button disabled={pending} className="rounded-md bg-black px-3 py-2 text-white disabled:opacity-50">Add link</button>

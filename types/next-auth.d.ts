@@ -8,6 +8,7 @@ declare module "next-auth" {
       hostLanguage: string;
       defaultGuestLanguage: string;
     } & DefaultSession["user"];
+    expires: string;
   }
 
   interface User {
