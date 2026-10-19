@@ -1,0 +1,2 @@
+This is not a calendar file.
+It's just plain text.

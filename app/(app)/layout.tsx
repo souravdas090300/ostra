@@ -1,6 +1,6 @@
 import { requireOwner } from "@/lib/auth";
 import Link from "next/link";
-import { signOut } from "@/lib/auth";
+import SignOutButton from "./SignOutButton";
 
 export default async function AppLayout({
   children,
@@ -49,19 +49,7 @@ export default async function AppLayout({
               <span className="text-sm text-gray-700 mr-4">
                 {session.user?.email}
               </span>
-              <form
-                action={async () => {
-                  "use server";
-                  await signOut();
-                }}
-              >
-                <button
-                  type="submit"
-                  className="text-sm text-gray-500 hover:text-gray-700"
-                >
-                  Sign out
-                </button>
-              </form>
+              <SignOutButton />
             </div>
           </div>
         </div>

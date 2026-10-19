@@ -1,14 +1,38 @@
 "use client";
 
-import { useActionState } from "react";
-import { addFeed, removeFeed, type FormState } from "@/app/(app)/apartments/actions";
+import React from "react";
+import { useActionState, useTransition } from "react";
+import { addFeed, removeFeed, syncFeedNow, type FormState } from "@/app/(app)/apartments/actions";
 
-type Feed = { id: string; source: string; icalUrl: string; lastSyncAt: string | null; lastError: string | null };
+type Feed = { id: string; source: string; icalUrl: string; lastSyncAt: string | null; lastSuccessAt: string | null; lastError: string | null };
 
 export function FeedManager({ apartmentId, feeds }: { apartmentId: string; feeds: Feed[] }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(
     addFeed.bind(null, apartmentId), undefined,
   );
+  const [isPending, startTransition] = useTransition();
+  const [syncMessages, setSyncMessages] = React.useState<Record<string, string>>({});
+
+  const handleSync = (feedId: string) => {
+    startTransition(async () => {
+      const result = await syncFeedNow(feedId);
+      setSyncMessages((prev) => ({ ...prev, [feedId]: result.message }));
+    });
+  };
+
+  const handleRemove = (feedId: string) => {
+    if (!confirm("This cancels this link's future bookings in Ostra. They stay on Airbnb/Booking.com.")) return;
+    startTransition(async () => {
+      await removeFeed(feedId, apartmentId);
+    });
+  };
+
+  const isStale = (lastSuccessAt: string | null) => {
+    if (!lastSuccessAt) return false;
+    const hoursSince = (Date.now() - new Date(lastSuccessAt).getTime()) / (1000 * 60 * 60);
+    return hoursSince > 3;
+  };
+
   return (
     <section className="max-w-2xl space-y-3">
       <h2 className="font-semibold">Calendar links (iCal)</h2>
@@ -18,17 +42,44 @@ export function FeedManager({ apartmentId, feeds }: { apartmentId: string; feeds
       <ul className="space-y-2">
         {feeds.map((f) => (
           <li key={f.id} className="flex items-start justify-between gap-3 rounded-md border p-3">
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="text-sm font-medium">{f.source === "AIRBNB" ? "Airbnb" : "Booking.com"}</p>
               <p className="truncate text-xs text-gray-600">{f.icalUrl.slice(0, 48)}...</p>
-              <p className="text-xs text-gray-500">
-                {f.lastSyncAt ? `Last synced ${new Date(f.lastSyncAt).toLocaleString()}` : "Not synced yet"}
-              </p>
-              {f.lastError && <p className="text-xs text-red-600">Last error: {f.lastError}</p>}
+              <div className="mt-1 space-y-1">
+                {f.lastSuccessAt ? (
+                  <p className="text-xs text-gray-500">
+                    Last successful sync: {new Date(f.lastSuccessAt).toLocaleString()}
+                    {isStale(f.lastSuccessAt) && (
+                      <span className="ml-2 text-amber-600 font-medium">(stale)</span>
+                    )}
+                  </p>
+                ) : (
+                  <p className="text-xs text-gray-500">Not synced yet</p>
+                )}
+                {f.lastError && <p className="text-xs text-red-600">Last error: {f.lastError}</p>}
+                {syncMessages[f.id] && (
+                  <p className={`text-xs ${syncMessages[f.id].startsWith("Done") ? "text-green-600" : "text-red-600"}`}>
+                    {syncMessages[f.id]}
+                  </p>
+                )}
+              </div>
             </div>
-            <form action={removeFeed.bind(null, f.id, apartmentId)}>
-              <button className="text-sm text-red-600 underline">Remove</button>
-            </form>
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleSync(f.id)}
+                disabled={isPending}
+                className="text-sm text-blue-600 underline disabled:opacity-50"
+              >
+                Sync now
+              </button>
+              <button
+                onClick={() => handleRemove(f.id)}
+                disabled={isPending}
+                className="text-sm text-red-600 underline disabled:opacity-50"
+              >
+                Remove
+              </button>
+            </div>
           </li>
         ))}
       </ul>

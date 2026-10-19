@@ -1,0 +1,17 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Airbnb Inc//Hosting Calendar//EN
+BEGIN:VEVENT
+DTSTART;VALUE=DATE:20261105
+DTEND;VALUE=DATE:20261108
+UID:abc123@airbnb.com
+SUMMARY:Reserved
+DESCRIPTION:Reservation URL: https://www.airbnb.com/hosting/reservations/details/XXXX\nPhone Number (Last 4 Digits): 1234
+END:VEVENT
+BEGIN:VEVENT
+DTSTART;VALUE=DATE:20261201
+DTEND;VALUE=DATE:20261204
+UID:blocked1@airbnb.com
+SUMMARY:Airbnb (Not available)
+END:VEVENT
+END:VCALENDAR

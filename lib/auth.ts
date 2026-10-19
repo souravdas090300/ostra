@@ -4,7 +4,7 @@ import { prisma } from "./db";
 import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
 
-export const { handlers, signIn, signOut, auth } = NextAuth({
+const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
     Credentials({
       credentials: {
@@ -68,6 +68,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   trustHost: true,
 });
+
+export { handlers, signIn, signOut, auth };
 
 export async function requireOwner() {
   const session = await auth();
