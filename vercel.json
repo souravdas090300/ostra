@@ -2,11 +2,11 @@
   "crons": [
     {
       "path": "/api/cron/sync-calendars",
-      "schedule": "0 * * * *"
+      "schedule": "0 2 * * *"
     },
     {
       "path": "/api/cron/send-scheduled",
-      "schedule": "*/10 * * * *"
+      "schedule": "0 */6 * * *"
     }
   ]
 }

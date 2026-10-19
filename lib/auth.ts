@@ -36,10 +36,30 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         return {
           id: owner.id,
           email: owner.email,
+          hostLanguage: owner.hostLanguage,
+          defaultGuestLanguage: owner.defaultGuestLanguage,
         };
       },
     }),
   ],
+  callbacks: {
+    jwt({ token, user }) {
+      if (user) {
+        token.id = user.id;
+        token.hostLanguage = user.hostLanguage;
+        token.defaultGuestLanguage = user.defaultGuestLanguage;
+      }
+      return token;
+    },
+    session({ session, token }) {
+      if (session.user) {
+        session.user.id = token.id as string;
+        session.user.hostLanguage = token.hostLanguage as string;
+        session.user.defaultGuestLanguage = token.defaultGuestLanguage as string;
+      }
+      return session;
+    },
+  },
   session: {
     strategy: "jwt",
   },
