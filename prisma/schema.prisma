@@ -6,16 +6,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
-}
-
-enum UsageKind {
-  AI_REPLY
-  AI_TRANSLATE
-  AI_TEMPLATE
-  WA_TEMPLATE
-  WA_FREEFORM
 }
 
 model Owner {
@@ -30,7 +22,7 @@ model Owner {
   passwordChangedAt   DateTime?
   monthlyAiBudgetCents Int        @default(1500)
   monthlyTemplateCap  Int         @default(1000)
-  waTemplateCost      Decimal     @default(0) @db.Decimal(8, 4)
+  waTemplateCost      String      @default("0")
   budgetWarnedMonth   String?
   createdAt           DateTime    @default(now())
   updatedAt           DateTime    @updatedAt
@@ -223,6 +215,7 @@ model OptOut {
   createdAt DateTime @default(now())
 
   @@unique([ownerId, phoneHash])
+  @@index([ownerId])
 }
 
 model LoginAttempt {
@@ -263,8 +256,8 @@ model UsageDaily {
   id           String    @id @default(cuid())
   ownerId      String
   owner        Owner     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  day          DateTime  @db.Date
-  kind         UsageKind
+  day          DateTime
+  kind         String    // AI_REPLY, AI_TRANSLATE, AI_TEMPLATE, WA_TEMPLATE, WA_FREEFORM
   count        Int       @default(0)
   inputTokens  Int       @default(0)
   outputTokens Int       @default(0)

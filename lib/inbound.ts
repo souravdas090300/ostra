@@ -8,6 +8,9 @@ import { notifyHost } from "./notify";
 import { optOutPhone } from "./optout";
 import { todayMalta } from "./dates";
 import { WhatsAppError, sendWhatsApp } from "./whatsapp";
+import { log } from "./log";
+import { assistantEnabled } from "./flags";
+import { assertAiBudget, recordUsage, checkAndSendBudgetWarning, BudgetExceededError } from "./usage";
 
 export type InboundInput = { sid: string; from: string; to: string; body: string; numMedia: number };
 
@@ -33,7 +36,6 @@ const UNMATCHED_REPLY =
 
 const isUnique = (e: unknown) => e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const log = (event: string, ids: Record<string, string>) => console.log(event, ids); // IDs only, never text or numbers
 
 export async function processInbound(i: InboundInput, now = new Date()): Promise<void> {
   const from = i.from.replace(/^whatsapp:/, "");
@@ -87,7 +89,7 @@ export async function answerInbound(input: AnswerInboundInput): Promise<void> {
     },
   });
   if (lastHour > 20) {
-    log("inbound.rate_limited", { bookingId: booking.id });
+    log("warn", "inbound.rate_limited", { bookingId: booking.id });
     return;
   }
 
@@ -96,14 +98,14 @@ export async function answerInbound(input: AnswerInboundInput): Promise<void> {
   // 1. Exact STOP: no AI.
   if (isStopKeyword(inbound.body)) {
     await optOutPhone(owner.id, from);
-    await reply(booking.id, from, STOP_CONFIRM[lang ?? "en"] ?? STOP_CONFIRM.en, "SYSTEM", lang);
-    log("inbound.stop", { bookingId: booking.id });
+    await reply(booking.id, from, STOP_CONFIRM[lang ?? "en"] ?? STOP_CONFIRM.en, "SYSTEM", lang, owner.id);
+    log("info", "inbound.stop", { bookingId: booking.id });
     return;
   }
 
   // 2. Photos and voice notes are not processed: hand over to the host.
   if (!inbound.body) {
-    const ok = await reply(booking.id, from, holdingText(lang), "AI", lang);
+    const ok = await reply(booking.id, from, holdingText(lang), "AI", lang, owner.id);
     await escalate(owner, booking, apartment.name, inbound.id, {
       reason: "Guest sent a photo or voice message.",
       urgent: false,
@@ -146,7 +148,35 @@ export async function answerInbound(input: AnswerInboundInput): Promise<void> {
     return;
   }
 
-  // 5. Ask the assistant.
+  // 5. Kill switch: if assistant is disabled, send holding message and escalate.
+  if (!assistantEnabled()) {
+    const ok = await reply(booking.id, from, holdingText(lang), "AI", lang, owner.id);
+    await escalate(owner, booking, apartment.name, inbound.id, {
+      reason: "Assistant switched off.",
+      urgent: false,
+      hostSummary: "A guest wrote to you but the assistant is switched off. Please reply yourself.",
+      sendFailed: !ok,
+    });
+    return;
+  }
+
+  // 6. Budget check before AI call.
+  try {
+    await assertAiBudget(owner.id, now);
+  } catch (e) {
+    if (e instanceof BudgetExceededError) {
+      await escalate(owner, booking, apartment.name, inbound.id, {
+        reason: "Monthly AI budget reached, no reply was sent.",
+        urgent: false,
+        hostSummary: "A guest wrote to you but the monthly AI budget was reached. Please reply yourself.",
+        sendFailed: false,
+      });
+      return;
+    }
+    throw e;
+  }
+
+  // 7. Ask the assistant.
   const previous = await prisma.message.findMany({
     where: { bookingId: booking.id, id: { not: inbound.id }, createdAt: { lte: inbound.createdAt } },
     orderBy: { createdAt: "desc" },
@@ -165,6 +195,10 @@ export async function answerInbound(input: AnswerInboundInput): Promise<void> {
       history: buildHistory(previous.reverse(), inbound.body),
       allowedText: [apartment.info, apartment.publicInfo, apartment.address, apartment.reviewUrl ?? ""].join("\n"),
     });
+    // Record usage after successful AI call
+    await recordUsage(owner.id, "AI_REPLY", out.usage);
+    // Check if we should send a budget warning
+    await checkAndSendBudgetWarning(owner.id, now);
   } catch {
     out = fallbackOutput(
       lang,
@@ -175,7 +209,7 @@ export async function answerInbound(input: AnswerInboundInput): Promise<void> {
 
   // 6. Act.
   if (out.optOut) await optOutPhone(owner.id, from);
-  const sent = await reply(booking.id, from, out.reply, "AI", out.language ?? lang);
+  const sent = await reply(booking.id, from, out.reply, "AI", out.language ?? lang, owner.id);
   await updateLanguage(booking.id, booking.guestLanguage, inbound.body, out.language);
   if (out.escalate || !sent) {
     await escalate(owner, booking, apartment.name, inbound.id, {
@@ -187,7 +221,7 @@ export async function answerInbound(input: AnswerInboundInput): Promise<void> {
   } else {
     await prisma.message.update({ where: { id: inbound.id }, data: { language: out.language } });
   }
-  log("inbound.done", { bookingId: booking.id, messageId: inbound.id });
+  log("info", "inbound.done", { bookingId: booking.id, messageId: inbound.id });
 }
 
 /** Sends a free-form reply (the guest just wrote, so the 24-hour window is open) and records it. */
@@ -196,10 +230,11 @@ async function reply(
   to: string,
   text: string,
   author: "AI" | "HOST" | "SYSTEM",
-  language: string | null
+  language: string | null,
+  ownerId: string
 ): Promise<boolean> {
   try {
-    const { sid } = await sendWhatsApp({ to, text });
+    const { sid } = await sendWhatsApp({ to, text, ownerId, kind: "WA_FREEFORM" });
     await prisma.message.create({
       data: {
         bookingId,

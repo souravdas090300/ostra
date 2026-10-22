@@ -3,6 +3,8 @@ import { buildValues, pickTranslation, renderText } from "./message-render";
 import { inAllowedWindow, latestUseful } from "./send-time";
 import { toTwilioBody } from "./templates";
 import { WhatsAppError, sendWhatsApp, whatsappMode } from "./whatsapp";
+import { automaticMessagesEnabled } from "./flags";
+import { monthlyCount, recordUsage } from "./usage";
 
 const BATCH = 20;
 const MAX_ATTEMPTS = 3;
@@ -18,6 +20,9 @@ export type SendSummary = {
 
 export async function sendDueMessages(now = new Date()): Promise<SendSummary> {
   const summary: SendSummary = { claimed: 0, sent: 0, skipped: 0, failed: 0, retried: 0 };
+
+  // Kill switch: if automatic messages are disabled, leave everything PENDING.
+  if (!automaticMessagesEnabled()) return summary;
 
   // A row stuck in SENDING may or may not have reached WhatsApp. Never retry it automatically.
   await prisma.scheduledMessage.updateMany({
@@ -101,6 +106,13 @@ async function sendOne(id: string, now: Date, s: SendSummary) {
     return;
   }
 
+  // Monthly template cap check.
+  const monthCount = await monthlyCount(owner.id, "WA_TEMPLATE", now);
+  if (monthCount >= owner.monthlyTemplateCap) {
+    await mark({ status: "PENDING", attempts: { decrement: 1 }, claimedAt: null }); // try again next run
+    return;
+  }
+
   // Daily cap per owner as a safety net against loops and mistakes.
   const since = new Date(now.getTime() - 24 * 3_600_000);
   const sentToday = await prisma.scheduledMessage.count({
@@ -127,6 +139,8 @@ async function sendOne(id: string, now: Date, s: SendSummary) {
       template: picked.translation.contentSid
         ? { contentSid: picked.translation.contentSid, variables }
         : undefined,
+      ownerId: owner.id,
+      kind: "WA_TEMPLATE",
     });
     await prisma.$transaction([
       prisma.scheduledMessage.update({

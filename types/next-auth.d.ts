@@ -7,6 +7,7 @@ declare module "next-auth" {
       email: string;
       hostLanguage: string;
       defaultGuestLanguage: string;
+      iat?: number;
     } & DefaultSession["user"];
     expires: string;
   }
@@ -24,5 +25,6 @@ declare module "next-auth/jwt" {
     id?: string;
     hostLanguage?: string;
     defaultGuestLanguage?: string;
+    iat?: number;
   }
 }

@@ -31,8 +31,8 @@ describe("optout", () => {
   describe("optOutPhone", () => {
     it("opts out phone across all bookings for owner", async () => {
       const mockBookings = [
-        { id: "booking1", status: "CONFIRMED", createdAt: new Date(), updatedAt: new Date(), apartmentId: "apt1", externalUid: null, source: "DIRECT", checkIn: new Date(), checkOut: new Date(), guestName: null, guestPhone: null, guestLanguage: null, guests: null, notes: null, isBlock: false, messagesPaused: false, optedInAt: null, optedOutAt: null, calendarFeedId: null },
-        { id: "booking2", status: "CONFIRMED", createdAt: new Date(), updatedAt: new Date(), apartmentId: "apt1", externalUid: null, source: "DIRECT", checkIn: new Date(), checkOut: new Date(), guestName: null, guestPhone: null, guestLanguage: null, guests: null, notes: null, isBlock: false, messagesPaused: false, optedInAt: null, optedOutAt: null, calendarFeedId: null },
+        { id: "booking1", status: "CONFIRMED", createdAt: new Date(), updatedAt: new Date(), apartmentId: "apt1", externalUid: null, source: "DIRECT", checkIn: new Date(), checkOut: new Date(), guestName: null, guestPhone: null, guestLanguage: null, guests: null, notes: null, isBlock: false, messagesPaused: false, optedInAt: null, optedOutAt: null, anonymisedAt: null, calendarFeedId: null },
+        { id: "booking2", status: "CONFIRMED", createdAt: new Date(), updatedAt: new Date(), apartmentId: "apt1", externalUid: null, source: "DIRECT", checkIn: new Date(), checkOut: new Date(), guestName: null, guestPhone: null, guestLanguage: null, guests: null, notes: null, isBlock: false, messagesPaused: false, optedInAt: null, optedOutAt: null, anonymisedAt: null, calendarFeedId: null },
       ];
       vi.mocked(prisma.booking.findMany).mockResolvedValue(mockBookings);
       vi.mocked(prisma.booking.updateMany).mockResolvedValue({ count: 2 });

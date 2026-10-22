@@ -3,6 +3,7 @@ import { fetchFeedText, FeedError } from "./ical-fetch";
 import { parseFeed, isBlockEvent } from "./ical";
 import { maltaLocalToUtc, maltaYmd } from "./time";
 import { rescheduleBookings } from "./schedule";
+import { log } from "./log";
 
 export type SyncResult = {
   feedId: string; ok: boolean; skipped?: boolean;
@@ -115,7 +116,7 @@ export async function syncFeed(feedId: string, now = new Date()): Promise<SyncRe
     return { ...base, ok: true, ...result, warning };
   } catch (e) {
     const message = e instanceof FeedError ? e.message : "Sync failed unexpectedly. Try again later.";
-    if (!(e instanceof FeedError)) console.error("sync failed", { feedId }); // no URL, no stack with URL
+    if (!(e instanceof FeedError)) log("error", "sync failed", { feedId });
     await prisma.calendarFeed.update({
       where: { id: feedId },
       data: { lastSyncAt: now, lastError: message }, // lastSuccessAt untouched, old bookings kept

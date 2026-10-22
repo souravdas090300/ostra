@@ -10,6 +10,7 @@ import { formatPhone } from "@/lib/phone";
 import { BookingForm } from "@/components/BookingForm";
 import { PlatformBlockNotice } from "@/components/PlatformBlockNotice";
 import { BookingActions } from "@/components/BookingActions";
+import { PrivacyActions } from "@/components/PrivacyActions";
 import { updateBooking, setMessagesPaused, skipScheduledMessage } from "../actions";
 
 export default async function BookingDetailPage({
@@ -340,6 +341,19 @@ export default async function BookingDetailPage({
               <BookingActions bookingId={booking.id} source={booking.source} status={booking.status} />
             </div>
           </div>
+
+          {/* Privacy section */}
+          {!booking.isBlock && (
+            <div className="rounded-lg border bg-white p-4">
+              <h3 className="text-lg font-semibold">Privacy</h3>
+              <p className="mt-2 text-sm text-gray-600">
+                Export or delete guest data in accordance with GDPR rights.
+              </p>
+              <div className="mt-4">
+                <PrivacyActions bookingId={booking.id} hasPhone={!!booking.guestPhone} />
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>
