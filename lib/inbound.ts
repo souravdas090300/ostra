@@ -11,6 +11,14 @@ import { WhatsAppError, sendWhatsApp } from "./whatsapp";
 
 export type InboundInput = { sid: string; from: string; to: string; body: string; numMedia: number };
 
+export type AnswerInboundInput = {
+  owner: { id: string; email: string; hostLanguage: string; defaultGuestLanguage: string };
+  booking: { id: string; guestPhone: string | null; guestLanguage: string | null; apartment: { name: string; address: string; checkInTime: string; checkOutTime: string; info: string; publicInfo: string; reviewUrl?: string | null } };
+  inbound: { id: string; body: string; hasMedia: boolean };
+  from: string;
+  now: Date;
+};
+
 const HOUR = 3_600_000;
 const E164 = /^\+\d{8,15}$/;
 const STOP_CONFIRM: Record<string, string> = {
@@ -64,6 +72,12 @@ export async function processInbound(i: InboundInput, now = new Date()): Promise
     throw e;
   }
 
+  await answerInbound({ owner, booking, apartment, inbound, from, now });
+}
+
+export async function answerInbound(input: AnswerInboundInput): Promise<void> {
+  const { owner, booking, apartment, inbound, from, now } = input;
+
   // Limits: stored, but no reply and no AI call.
   const lastHour = await prisma.message.count({
     where: {
@@ -80,7 +94,7 @@ export async function processInbound(i: InboundInput, now = new Date()): Promise
   const lang = normaliseLanguage(booking.guestLanguage) ?? normaliseLanguage(owner.defaultGuestLanguage);
 
   // 1. Exact STOP: no AI.
-  if (isStopKeyword(body)) {
+  if (isStopKeyword(inbound.body)) {
     await optOutPhone(owner.id, from);
     await reply(booking.id, from, STOP_CONFIRM[lang ?? "en"] ?? STOP_CONFIRM.en, "SYSTEM", lang);
     log("inbound.stop", { bookingId: booking.id });
@@ -88,7 +102,7 @@ export async function processInbound(i: InboundInput, now = new Date()): Promise
   }
 
   // 2. Photos and voice notes are not processed: hand over to the host.
-  if (!body) {
+  if (!inbound.body) {
     const ok = await reply(booking.id, from, holdingText(lang), "AI", lang);
     await escalate(owner, booking, apartment.name, inbound.id, {
       reason: "Guest sent a photo or voice message.",
@@ -148,7 +162,7 @@ export async function processInbound(i: InboundInput, now = new Date()): Promise
       unlocked: detailsUnlocked(booking, now),
       today: todayMalta(now),
       knownLanguage: lang,
-      history: buildHistory(previous.reverse(), body),
+      history: buildHistory(previous.reverse(), inbound.body),
       allowedText: [apartment.info, apartment.publicInfo, apartment.address, apartment.reviewUrl ?? ""].join("\n"),
     });
   } catch {
@@ -162,7 +176,7 @@ export async function processInbound(i: InboundInput, now = new Date()): Promise
   // 6. Act.
   if (out.optOut) await optOutPhone(owner.id, from);
   const sent = await reply(booking.id, from, out.reply, "AI", out.language ?? lang);
-  await updateLanguage(booking.id, booking.guestLanguage, body, out.language);
+  await updateLanguage(booking.id, booking.guestLanguage, inbound.body, out.language);
   if (out.escalate || !sent) {
     await escalate(owner, booking, apartment.name, inbound.id, {
       reason: sent ? out.reason : "The reply could not be sent.",
@@ -244,7 +258,7 @@ async function escalate(
     await notifyHost({
       to: owner.email,
       subject: `${e.urgent ? "URGENT: " : ""}A guest needs you at ${apartmentName}`,
-      text: `${e.hostSummary}\n\nOpen: ${process.env.APP_URL}/bookings/${booking.id}`,
+      text: `${e.hostSummary}\n\nOpen: ${process.env.APP_URL}/inbox/${booking.id}`,
     });
   }
 }

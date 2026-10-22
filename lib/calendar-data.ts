@@ -182,11 +182,11 @@ export async function loadEscalatedMessages(ownerId: string) {
 }
 
 export async function loadUnmatchedCount(ownerId: string) {
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const count = await prisma.unmatchedMessage.count({
     where: {
       ownerId,
-      receivedAt: { gte: sevenDaysAgo },
+      receivedAt: { gte: thirtyDaysAgo },
     },
   });
   return count;
