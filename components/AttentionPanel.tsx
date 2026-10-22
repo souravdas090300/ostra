@@ -254,7 +254,7 @@ export function AttentionPanel({
             <ul className="mt-2 space-y-1">
               {escalatedMessages.slice(0, 5).map((m) => (
                 <li key={m.bookingId} className="text-sm">
-                  <Link href={`/bookings/${m.bookingId}`} className="text-red-700 underline">
+                  <Link href={`/inbox/${m.bookingId}`} className="text-red-700 underline">
                     {apartmentNames[m.apartmentId]}
                     {m.urgent && <span className="ml-2 font-bold">URGENT</span>}: {m.hostSummary}
                   </Link>
@@ -272,7 +272,10 @@ export function AttentionPanel({
           <div>
             <h3 className="text-sm font-medium text-amber-800">Messages from numbers with no booking</h3>
             <p className="mt-2 text-sm text-amber-700">
-              {unmatchedCount} message{unmatchedCount !== 1 ? "s" : ""} in the last 7 days
+              <Link href="/inbox?tab=unknown" className="underline">
+                {unmatchedCount} message{unmatchedCount !== 1 ? "s" : ""}
+              </Link>{" "}
+              in the last 30 days
             </p>
           </div>
         )}

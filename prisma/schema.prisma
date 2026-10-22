@@ -6,8 +6,16 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+enum UsageKind {
+  AI_REPLY
+  AI_TRANSLATE
+  AI_TEMPLATE
+  WA_TEMPLATE
+  WA_FREEFORM
 }
 
 model Owner {
@@ -18,12 +26,21 @@ model Owner {
   defaultGuestLanguage String     @default("en")
   fallbackLanguage    String      @default("en")
   whatsappFrom        String?    @unique
+  retentionDays       Int         @default(90)
+  passwordChangedAt   DateTime?
+  monthlyAiBudgetCents Int        @default(1500)
+  monthlyTemplateCap  Int         @default(1000)
+  waTemplateCost      Decimal     @default(0) @db.Decimal(8, 4)
+  budgetWarnedMonth   String?
   createdAt           DateTime    @default(now())
   updatedAt           DateTime    @updatedAt
 
   apartments          Apartment[]
   templates           MessageTemplate[]
   unmatched           UnmatchedMessage[]
+  optOuts             OptOut[]
+  auditLogs           AuditLog[]
+  usageDaily          UsageDaily[]
 }
 
 model Apartment {
@@ -86,6 +103,7 @@ model Booking {
   messagesPaused Boolean @default(false)    // host paused automatic messages (used in Phase 6)
   optedInAt    DateTime?
   optedOutAt   DateTime?
+  anonymisedAt DateTime?
   calendarFeedId String?
   calendarFeed CalendarFeed? @relation(fields: [calendarFeedId], references: [id], onDelete: SetNull)
   createdAt    DateTime @default(now())
@@ -119,9 +137,13 @@ model Message {
   deliveryStatus      String?  // queued | sent | delivered | read | failed | undelivered | dry-run
   errorCode           Int?
   scheduledMessageId  String?  @unique
+  originalBody        String?  // the host's text in her own language, when the sent text is a translation
+  resolvedAt          DateTime?
+  reminderSentAt      DateTime?
   createdAt           DateTime @default(now())
 
   @@index([bookingId, createdAt])
+  @@index([escalated, resolved])
 }
 
 model ScheduledMessage {
@@ -187,6 +209,66 @@ model UnmatchedMessage {
   twilioSid  String   @unique
   receivedAt DateTime @default(now())
   repliedAt  DateTime?
+  handledAt  DateTime?
+  linkedBookingId String?
 
   @@index([ownerId, phone, receivedAt])
+}
+
+model OptOut {
+  id        String   @id @default(cuid())
+  ownerId   String
+  owner     Owner    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  phoneHash String
+  createdAt DateTime @default(now())
+
+  @@unique([ownerId, phoneHash])
+}
+
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  emailHash String
+  ipHash    String
+  success   Boolean
+  createdAt DateTime @default(now())
+
+  @@index([emailHash, createdAt])
+  @@index([ipHash, createdAt])
+}
+
+model JobRun {
+  id         String    @id @default(cuid())
+  job        String
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  ok         Boolean   @default(false)
+  summary    String?
+
+  @@index([job, startedAt])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  ownerId    String?
+  owner      Owner?   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  action     String
+  targetType String?
+  targetId   String?
+  createdAt  DateTime @default(now())
+
+  @@index([ownerId, createdAt])
+}
+
+model UsageDaily {
+  id           String    @id @default(cuid())
+  ownerId      String
+  owner        Owner     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  day          DateTime  @db.Date
+  kind         UsageKind
+  count        Int       @default(0)
+  inputTokens  Int       @default(0)
+  outputTokens Int       @default(0)
+  createdAt    DateTime  @default(now())
+
+  @@unique([ownerId, day, kind])
 }

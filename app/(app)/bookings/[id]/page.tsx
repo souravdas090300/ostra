@@ -263,7 +263,12 @@ export default async function BookingDetailPage({
 
           {/* Message history section */}
           <div className="rounded-lg border bg-white p-4">
-            <h3 className="text-lg font-semibold">Message history</h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Message history</h3>
+              <Link href={`/inbox/${booking.id}`} className="text-sm text-blue-600 hover:text-blue-800">
+                Open conversation
+              </Link>
+            </div>
             {booking.messages.length === 0 ? (
               <p className="mt-4 text-sm text-gray-600">No messages yet.</p>
             ) : (
