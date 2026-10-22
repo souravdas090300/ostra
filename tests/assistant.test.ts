@@ -87,10 +87,12 @@ describe("fallbackOutput", () => {
     expect(result.reply).toContain("Thanks for your message");
     expect(result.reason).toBe("Test reason");
     expect(result.hostSummary).toBe("Test summary");
+    expect(result.usage).toEqual({ input: 0, output: 0 });
   });
 
   it("sets optOut to false by default", () => {
     const result = fallbackOutput("en", "Test", "Test");
     expect(result.optOut).toBe(false);
+    expect(result.usage).toEqual({ input: 0, output: 0 });
   });
 });

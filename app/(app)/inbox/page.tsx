@@ -160,7 +160,7 @@ export default async function InboxPage({ searchParams }: { searchParams: { tab?
                   <p className="text-xs text-gray-500">{new Date(r.lastAt).toLocaleString()}</p>
                 </div>
               </div>
-            </a>
+            </Link>
           ))}
         </div>
       )}

@@ -1,9 +1,11 @@
+import { log } from "./log";
+
 type Notice = { to: string; subject: string; text: string };
 
 export async function sendEmail(n: Notice): Promise<void> {
   const key = process.env.RESEND_API_KEY;
   if (!key || !process.env.NOTIFY_FROM) {
-    console.log("notify (dry-run)", { subject: n.subject });
+    log("info", "notify (dry-run)", { reason: "no key" });
     return; // never log the body
   }
   try {
@@ -14,7 +16,7 @@ export async function sendEmail(n: Notice): Promise<void> {
       signal: AbortSignal.timeout(10_000),
     });
   } catch {
-    console.error("notify failed");
+    log("error", "notify failed");
   }
 }
 

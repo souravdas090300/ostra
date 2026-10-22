@@ -2,6 +2,7 @@ import { prisma } from "./db";
 import { validateTemplate, toTwilioBody } from "./templates";
 import { whatsappMode } from "./whatsapp";
 import twilio from "twilio";
+import { log } from "./log";
 
 const getClient = () => twilio(process.env.TWILIO_ACCOUNT_SID!, process.env.TWILIO_AUTH_TOKEN!);
 
@@ -128,7 +129,7 @@ export async function syncApprovals(): Promise<void> {
       }
     } catch (e) {
       // Never throw for one bad row; log and continue
-      console.error(`Failed to sync approval for translation ${t.id}:`, e);
+      log("error", "template_approval_failed", { translationId: t.id });
     }
   }
 }

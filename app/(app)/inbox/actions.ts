@@ -12,6 +12,7 @@ import { missingTokens, translateText, ReplyTranslationError } from "@/lib/trans
 import { WhatsAppError, sendWhatsApp } from "@/lib/whatsapp";
 import { answerInbound } from "@/lib/inbound";
 import { rescheduleBookings } from "@/lib/schedule";
+import { log } from "@/lib/log";
 
 export type PreviewState = {
   ok?: boolean;
@@ -248,7 +249,7 @@ export async function linkUnmatchedToBooking(unmatchedId: string, bookingId: str
       try {
         await answerInbound({ owner, booking, apartment: booking.apartment, inbound, from: u.phone, now: new Date() });
       } catch {
-        console.error("answer after link failed", { bookingId: booking.id });
+        log("error", "answer after link failed", { bookingId: booking.id });
       }
     });
   }

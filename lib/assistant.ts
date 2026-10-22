@@ -16,6 +16,7 @@ export type AssistantOutput = {
   reason: string;
   hostSummary: string;
   optOut: boolean;
+  usage: { input: number; output: number };
 };
 
 const RESPOND_TOOL = {
@@ -66,6 +67,7 @@ export function fallbackOutput(lang: string | null, reason: string, hostLanguage
     reason,
     hostSummary: hostLanguageSummary,
     optOut: false,
+    usage: { input: 0, output: 0 },
   };
 }
 
@@ -112,6 +114,11 @@ export async function answerGuest(input: AnswerInput): Promise<AssistantOutput> 
   if (!parsed || !parsed.success) throw new AssistantError("The AI returned an unusable answer.");
   const o = parsed.data;
 
+  const usage = {
+    input: res.usage.input_tokens,
+    output: res.usage.output_tokens,
+  };
+
   const out: AssistantOutput = {
     language: normaliseLanguage(o.language),
     reply: o.reply.trim(),
@@ -120,6 +127,7 @@ export async function answerGuest(input: AnswerInput): Promise<AssistantOutput> 
     reason: o.reason.trim(),
     hostSummary: o.host_summary.trim(),
     optOut: o.opt_out,
+    usage,
   };
 
   // Code-level checks on what the model wrote.

@@ -1,6 +1,12 @@
 import { signIn } from "@/lib/auth";
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const params = await searchParams;
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="max-w-md w-full space-y-8">
@@ -15,7 +21,9 @@ export default function LoginPage() {
         <form
           action={async (formData) => {
             "use server";
-            await signIn("credentials", formData);
+            await signIn("credentials", formData, {
+              redirectTo: "/calendar",
+            });
           }}
           className="mt-8 space-y-6"
         >
@@ -47,6 +55,14 @@ export default function LoginPage() {
               />
             </div>
           </div>
+
+          {params.error && (
+            <div className="rounded-md bg-red-50 p-4">
+              <p className="text-sm text-red-800">
+                Email or password is wrong, or there were too many attempts. Try again in 15 minutes.
+              </p>
+            </div>
+          )}
 
           <div>
             <button

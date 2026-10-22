@@ -215,6 +215,7 @@ describe("processInbound", () => {
       reason: "Guest asked about money",
       hostSummary: "Guest wants a refund",
       optOut: false,
+      usage: { input: 0, output: 0 },
     });
 
     await processInbound({
@@ -273,6 +274,7 @@ describe("processInbound", () => {
       reason: "Test",
       hostSummary: "Test summary",
       optOut: false,
+      usage: { input: 0, output: 0 },
     });
 
     await processInbound({
