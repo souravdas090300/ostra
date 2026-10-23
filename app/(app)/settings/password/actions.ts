@@ -1,7 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requireOwner } from "@/lib/auth";
 import bcrypt from "bcryptjs";
@@ -36,7 +34,7 @@ const COMMON_PASSWORDS = new Set([
 ]);
 
 export async function changePassword(formData: FormData): Promise<{ error?: string }> {
-  const owner = await requireOwner();
+  const session = await requireOwner();
   const currentPassword = formData.get("currentPassword") as string;
   const newPassword = formData.get("newPassword") as string;
   const confirmPassword = formData.get("confirmPassword") as string;
@@ -54,8 +52,8 @@ export async function changePassword(formData: FormData): Promise<{ error?: stri
   }
 
   // Check not equal to email
-  const emailLocal = owner.email.split("@")[0].toLowerCase();
-  if (newPassword.toLowerCase().includes(emailLocal) || newPassword.toLowerCase() === owner.email.toLowerCase()) {
+  const emailLocal = session.user.email.split("@")[0].toLowerCase();
+  if (newPassword.toLowerCase().includes(emailLocal) || newPassword.toLowerCase() === session.user.email.toLowerCase()) {
     return { error: "Password cannot contain your email." };
   }
 
@@ -66,7 +64,7 @@ export async function changePassword(formData: FormData): Promise<{ error?: stri
 
   // Verify current password
   const currentOwner = await prisma.owner.findUnique({
-    where: { id: owner.id },
+    where: { id: session.user.id },
     select: { passwordHash: true },
   });
 
@@ -82,7 +80,7 @@ export async function changePassword(formData: FormData): Promise<{ error?: stri
   // Update password
   const passwordHash = await bcrypt.hash(newPassword, 12);
   await prisma.owner.update({
-    where: { id: owner.id },
+    where: { id: session.user.id },
     data: {
       passwordHash,
       passwordChangedAt: new Date(),
@@ -92,10 +90,10 @@ export async function changePassword(formData: FormData): Promise<{ error?: stri
   // Write audit log
   await prisma.auditLog.create({
     data: {
-      ownerId: owner.id,
+      ownerId: session.user.id,
       action: "PASSWORD_CHANGED",
       targetType: "owner",
-      targetId: owner.id,
+      targetId: session.user.id,
     },
   });
 

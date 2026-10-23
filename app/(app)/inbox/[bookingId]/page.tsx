@@ -4,18 +4,19 @@ import { windowOpen, windowEnd } from "@/lib/reply-window";
 import { getLanguage } from "@/lib/languages";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { Composer } from "@/components/Composer";
+import { MessageFeedback } from "@/components/MessageFeedback";
 import { resolveConversation, reopenMessage } from "../actions";
 import Link from "next/link";
 
 export default async function ThreadPage({ params }: { params: Promise<{ bookingId: string }> }) {
   const { bookingId } = await params;
-  const owner = await requireOwner();
-  const t = await loadThread(owner.id, bookingId);
+  const session = await requireOwner();
+  const t = await loadThread(session.user.id, bookingId);
   if (!t) return <div>Not found</div>;
 
   const { booking, messages, lastGuestAt, lastDetected, unresolved } = t;
-  const guestLanguage = booking.guestLanguage ?? lastDetected ?? owner.defaultGuestLanguage;
-  const sameLanguage = guestLanguage === owner.hostLanguage;
+  const guestLanguage = booking.guestLanguage ?? lastDetected ?? session.user.defaultGuestLanguage;
+  const sameLanguage = guestLanguage === session.user.hostLanguage;
   const now = new Date();
   const open = windowOpen(lastGuestAt, now);
   const guestLangName = getLanguage(guestLanguage)?.name ?? guestLanguage;
@@ -23,9 +24,9 @@ export default async function ThreadPage({ params }: { params: Promise<{ booking
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2">
-        <a href="/inbox" className="text-sm text-gray-600 hover:text-gray-900">
+        <Link href="/inbox" className="text-sm text-gray-600 hover:text-gray-900">
           ← Back
-        </a>
+        </Link>
       </div>
 
       <div>
@@ -120,6 +121,13 @@ export default async function ThreadPage({ params }: { params: Promise<{ booking
                   )}
                 </div>
               )}
+              {m.author === "AI" && m.direction === "OUTBOUND" && (
+                <MessageFeedback
+                  messageId={m.id}
+                  initialFeedback={m.feedback as "GOOD" | "WRONG" | null}
+                  initialNote={m.feedbackNote}
+                />
+              )}
             </div>
           </div>
         ))}
@@ -129,7 +137,7 @@ export default async function ThreadPage({ params }: { params: Promise<{ booking
         bookingId={booking.id}
         windowOpen={open}
         hasPhone={!!booking.guestPhone}
-        hostLanguage={owner.hostLanguage}
+        hostLanguage={session.user.hostLanguage}
         guestLanguage={guestLanguage}
         sameLanguage={sameLanguage}
         hasUnresolved={unresolved.length > 0}

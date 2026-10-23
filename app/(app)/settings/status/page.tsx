@@ -1,9 +1,10 @@
 import { requireOwner } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { assistantEnabled, automaticMessagesEnabled } from "@/lib/flags";
+import { loadWrongAnswers } from "@/lib/inbox-data";
 
 export default async function StatusPage() {
-  const owner = await requireOwner();
+  const session = await requireOwner();
 
   // Get last job runs
   const jobRuns = await prisma.jobRun.findMany({
@@ -21,7 +22,7 @@ export default async function StatusPage() {
 
   // Get feeds with last success
   const feeds = await prisma.calendarFeed.findMany({
-    where: { apartment: { ownerId: owner.id } },
+    where: { apartment: { ownerId: session.user.id } },
     select: {
       id: true,
       apartment: { select: { name: true } },
@@ -35,19 +36,42 @@ export default async function StatusPage() {
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60_000);
   const failedScheduled = await prisma.scheduledMessage.count({
     where: {
-      booking: { apartment: { ownerId: owner.id } },
+      booking: { apartment: { ownerId: session.user.id } },
       status: "FAILED",
       createdAt: { gte: sevenDaysAgo },
     },
   });
   const failedOutbound = await prisma.message.count({
     where: {
-      booking: { apartment: { ownerId: owner.id } },
+      booking: { apartment: { ownerId: session.user.id } },
       direction: "OUTBOUND",
       deliveryStatus: { in: ["failed", "undelivered"] },
       createdAt: { gte: sevenDaysAgo },
     },
   });
+
+  // Get AI feedback from last 7 days
+  const feedbackGood = await prisma.message.count({
+    where: {
+      booking: { apartment: { ownerId: session.user.id } },
+      author: "AI",
+      direction: "OUTBOUND",
+      feedback: "GOOD",
+      feedbackAt: { gte: sevenDaysAgo },
+    },
+  });
+  const feedbackWrong = await prisma.message.count({
+    where: {
+      booking: { apartment: { ownerId: session.user.id } },
+      author: "AI",
+      direction: "OUTBOUND",
+      feedback: "WRONG",
+      feedbackAt: { gte: sevenDaysAgo },
+    },
+  });
+
+  // Get wrong answers with context
+  const wrongAnswers = await loadWrongAnswers(session.user.id, sevenDaysAgo);
 
   return (
     <div className="space-y-6">
@@ -156,6 +180,75 @@ export default async function StatusPage() {
           </div>
         </div>
       </div>
+
+      {/* AI feedback */}
+      <div className="rounded-lg border bg-white p-4">
+        <h2 className="font-medium">AI feedback (last 7 days)</h2>
+        <div className="mt-3 space-y-2 text-sm">
+          <div className="flex items-center justify-between">
+            <span>Good answers</span>
+            <span className="text-green-600">{feedbackGood}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span>Wrong answers</span>
+            <span className={feedbackWrong > 0 ? "text-red-600" : "text-gray-600"}>
+              {feedbackWrong}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Wrong answers list */}
+      {wrongAnswers.length > 0 && (
+        <div className="rounded-lg border bg-white p-4">
+          <h2 className="font-medium">Wrong answers (last 7 days)</h2>
+          <div className="mt-3 space-y-3">
+            {wrongAnswers.map((msg) => (
+              <div key={msg.id} className="rounded border p-3 text-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-medium">{msg.apartmentName}</span>
+                  <span className="text-xs text-gray-500">
+                    {msg.feedbackAt?.toLocaleString()}
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-gray-600">{msg.question}</p>
+                  <p className="font-medium">{msg.body}</p>
+                  {msg.feedbackNote && (
+                    <p className="text-red-600">Note: {msg.feedbackNote}</p>
+                  )}
+                </div>
+                <div className="mt-2">
+                  <a
+                    href={`/inbox/${msg.bookingId}`}
+                    className="text-xs text-blue-600 hover:text-blue-800"
+                  >
+                    View conversation
+                  </a>
+                  <button
+                    onClick={() => {
+                      const testCase = JSON.stringify(
+                        {
+                          question: msg.question,
+                          answer: msg.body,
+                          note: msg.feedbackNote,
+                        },
+                        null,
+                        2
+                      );
+                      navigator.clipboard.writeText(testCase);
+                      alert("Copied as test case");
+                    }}
+                    className="ml-3 text-xs text-blue-600 hover:text-blue-800"
+                  >
+                    Copy as test case
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* App version */}
       <div className="rounded-lg border bg-white p-4">

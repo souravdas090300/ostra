@@ -70,6 +70,7 @@ describe("processInbound", () => {
       reason: "",
       hostSummary: "",
       optOut: false,
+      usage: { input: 100, output: 50 },
     });
 
     await processInbound({
@@ -129,6 +130,7 @@ describe("processInbound", () => {
       reason: "",
       hostSummary: "",
       optOut: false,
+      usage: { input: 100, output: 50 },
     });
 
     await processInbound({

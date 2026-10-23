@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 
 export function AutoRefresh({ interval = 20_000 }: { interval?: number }) {
   const router = useRouter();
-  const timerRef = useRef<NodeJS.Timeout>();
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const refresh = () => {
@@ -15,7 +15,9 @@ export function AutoRefresh({ interval = 20_000 }: { interval?: number }) {
     };
 
     timerRef.current = setInterval(refresh, interval);
-    return () => clearInterval(timerRef.current);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
   }, [router, interval]);
 
   return null;

@@ -1,5 +1,6 @@
 import { prisma } from "./db";
-import type { UsageKind } from "@prisma/client";
+
+type UsageKind = "AI_REPLY" | "AI_TRANSLATE" | "AI_TEMPLATE" | "WA_TEMPLATE" | "WA_FREEFORM";
 import { notifyHost } from "./notify";
 
 const monthStart = (d = new Date()) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));

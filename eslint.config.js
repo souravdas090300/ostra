@@ -15,14 +15,12 @@ const eslintConfig = [
     rules: {
       "no-console": "error",
     },
-    overrides: [
-      {
-        files: ["lib/log.ts", "scripts/**/*"],
-        rules: {
-          "no-console": "off",
-        },
-      },
-    ],
+  },
+  {
+    files: ["lib/log.ts", "scripts/**/*"],
+    rules: {
+      "no-console": "off",
+    },
   },
 ];
 

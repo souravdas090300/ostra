@@ -92,3 +92,61 @@ export async function inboxCounts(ownerId: string) {
   ]);
   return { needs, urgent, unknown };
 }
+
+export type WrongAnswer = {
+  id: string;
+  bookingId: string;
+  apartmentName: string;
+  question: string;
+  body: string;
+  feedbackNote: string | null;
+  feedbackAt: Date | null;
+};
+
+export async function loadWrongAnswers(ownerId: string, since: Date): Promise<WrongAnswer[]> {
+  const messages = await prisma.message.findMany({
+    where: {
+      booking: { apartment: { ownerId } },
+      author: "AI",
+      direction: "OUTBOUND",
+      feedback: "WRONG",
+      feedbackAt: { gte: since },
+    },
+    include: {
+      booking: {
+        select: {
+          id: true,
+          apartment: { select: { name: true } },
+        },
+      },
+    },
+    orderBy: { feedbackAt: "desc" },
+    take: 20,
+  });
+
+  // For each wrong answer, try to find the previous inbound message
+  const results: WrongAnswer[] = [];
+  for (const msg of messages) {
+    const previousInbound = await prisma.message.findFirst({
+      where: {
+        bookingId: msg.bookingId,
+        direction: "INBOUND",
+        createdAt: { lt: msg.createdAt },
+      },
+      orderBy: { createdAt: "desc" },
+      select: { body: true },
+    });
+
+    results.push({
+      id: msg.id,
+      bookingId: msg.booking.id,
+      apartmentName: msg.booking.apartment.name,
+      question: previousInbound?.body || "Guest question (see conversation)",
+      body: msg.body,
+      feedbackNote: msg.feedbackNote,
+      feedbackAt: msg.feedbackAt,
+    });
+  }
+
+  return results;
+}

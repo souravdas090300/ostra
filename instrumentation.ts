@@ -4,8 +4,6 @@ Sentry.init({
   dsn: process.env.SENTRY_DSN,
   environment: process.env.NODE_ENV,
   tracesSampleRate: 0.1,
-  sendDefaultPii: false,
-  tunnelRoute: "/monitoring",
   beforeSend(event) {
     // Remove request data, cookies, headers, user
     delete event.request?.data;
