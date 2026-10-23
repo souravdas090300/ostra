@@ -16,8 +16,9 @@ export type InboundInput = { sid: string; from: string; to: string; body: string
 
 export type AnswerInboundInput = {
   owner: { id: string; email: string; hostLanguage: string; defaultGuestLanguage: string };
-  booking: { id: string; guestPhone: string | null; guestLanguage: string | null; apartment: { name: string; address: string; checkInTime: string; checkOutTime: string; info: string; publicInfo: string; reviewUrl?: string | null } };
-  inbound: { id: string; body: string; hasMedia: boolean };
+  booking: { id: string; guestPhone: string | null; guestLanguage: string | null; guestName: string | null; checkIn: Date; checkOut: Date; guests: number | null };
+  apartment: { name: string; address: string; checkInTime: string; checkOutTime: string; info: string; publicInfo: string; reviewUrl?: string | null };
+  inbound: { id: string; body: string; hasMedia: boolean; createdAt: Date };
   from: string;
   now: Date;
 };
@@ -74,7 +75,7 @@ export async function processInbound(i: InboundInput, now = new Date()): Promise
     throw e;
   }
 
-  await answerInbound({ owner, booking, apartment, inbound, from, now });
+  await answerInbound({ owner, booking, apartment, inbound: { ...inbound, createdAt: inbound.createdAt || now }, from, now });
 }
 
 export async function answerInbound(input: AnswerInboundInput): Promise<void> {
@@ -106,7 +107,7 @@ export async function answerInbound(input: AnswerInboundInput): Promise<void> {
   // 2. Photos and voice notes are not processed: hand over to the host.
   if (!inbound.body) {
     const ok = await reply(booking.id, from, holdingText(lang), "AI", lang, owner.id);
-    await escalate(owner, booking, apartment.name, inbound.id, {
+    await escalate(owner, { id: booking.id, guestName: booking.guestName, checkIn: booking.checkIn, checkOut: booking.checkOut, guests: booking.guests }, apartment.name, inbound.id, {
       reason: "Guest sent a photo or voice message.",
       urgent: false,
       hostSummary: "The guest sent a photo or voice message. Open the chat on your phone to view it.",
@@ -139,7 +140,7 @@ export async function answerInbound(input: AnswerInboundInput): Promise<void> {
     }),
   ]);
   if (aiBooking >= 40 || aiOwner >= Number(process.env.MAX_AI_REPLIES_PER_DAY ?? 300)) {
-    await escalate(owner, booking, apartment.name, inbound.id, {
+    await escalate(owner, { id: booking.id, guestName: booking.guestName, checkIn: booking.checkIn, checkOut: booking.checkOut, guests: booking.guests }, apartment.name, inbound.id, {
       reason: "Assistant limit reached, no reply was sent.",
       urgent: false,
       hostSummary: "A guest wrote to you but the assistant's daily limit was reached. Please reply yourself.",
@@ -151,7 +152,7 @@ export async function answerInbound(input: AnswerInboundInput): Promise<void> {
   // 5. Kill switch: if assistant is disabled, send holding message and escalate.
   if (!assistantEnabled()) {
     const ok = await reply(booking.id, from, holdingText(lang), "AI", lang, owner.id);
-    await escalate(owner, booking, apartment.name, inbound.id, {
+    await escalate(owner, { id: booking.id, guestName: booking.guestName, checkIn: booking.checkIn, checkOut: booking.checkOut, guests: booking.guests }, apartment.name, inbound.id, {
       reason: "Assistant switched off.",
       urgent: false,
       hostSummary: "A guest wrote to you but the assistant is switched off. Please reply yourself.",
@@ -165,7 +166,7 @@ export async function answerInbound(input: AnswerInboundInput): Promise<void> {
     await assertAiBudget(owner.id, now);
   } catch (e) {
     if (e instanceof BudgetExceededError) {
-      await escalate(owner, booking, apartment.name, inbound.id, {
+      await escalate(owner, { id: booking.id, guestName: booking.guestName, checkIn: booking.checkIn, checkOut: booking.checkOut, guests: booking.guests }, apartment.name, inbound.id, {
         reason: "Monthly AI budget reached, no reply was sent.",
         urgent: false,
         hostSummary: "A guest wrote to you but the monthly AI budget was reached. Please reply yourself.",
@@ -212,7 +213,7 @@ export async function answerInbound(input: AnswerInboundInput): Promise<void> {
   const sent = await reply(booking.id, from, out.reply, "AI", out.language ?? lang, owner.id);
   await updateLanguage(booking.id, booking.guestLanguage, inbound.body, out.language);
   if (out.escalate || !sent) {
-    await escalate(owner, booking, apartment.name, inbound.id, {
+    await escalate(owner, { id: booking.id, guestName: booking.guestName, checkIn: booking.checkIn, checkOut: booking.checkOut, guests: booking.guests }, apartment.name, inbound.id, {
       reason: sent ? out.reason : "The reply could not be sent.",
       urgent: out.urgent,
       hostSummary: out.hostSummary || "A guest message needs your attention.",
@@ -265,7 +266,7 @@ async function reply(
 
 async function escalate(
   owner: { id: string; email: string },
-  booking: { id: string },
+  booking: { id: string; guestName: string | null; checkIn: Date; checkOut: Date; guests: number | null },
   apartmentName: string,
   inboundId: string,
   e: { reason: string; urgent: boolean; hostSummary: string; sendFailed: boolean }

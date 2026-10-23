@@ -1,6 +1,7 @@
 import twilio from "twilio";
 import { recordUsage } from "./usage";
-import type { UsageKind } from "@prisma/client";
+
+type UsageKind = "AI_REPLY" | "AI_TRANSLATE" | "AI_TEMPLATE" | "WA_TEMPLATE" | "WA_FREEFORM";
 
 export type WhatsAppMode = "dry-run" | "sandbox" | "production";
 

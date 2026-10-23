@@ -93,6 +93,9 @@ describe("twilio-status webhook", () => {
       originalBody: null,
       resolvedAt: null,
       reminderSentAt: null,
+      feedback: null,
+      feedbackNote: null,
+      feedbackAt: null,
     });
     vi.mocked(prisma.message.update).mockResolvedValue({
       id: "msg1",
@@ -115,6 +118,9 @@ describe("twilio-status webhook", () => {
       originalBody: null,
       resolvedAt: null,
       reminderSentAt: null,
+      feedback: null,
+      feedbackNote: null,
+      feedbackAt: null,
     });
 
     const formData = new FormData();
@@ -161,8 +167,9 @@ describe("twilio-status webhook", () => {
       originalBody: null,
       resolvedAt: null,
       reminderSentAt: null,
-    });
-      urgent: false,
+      feedback: null,
+      feedbackNote: null,
+      feedbackAt: null,
     });
 
     const formData = new FormData();
@@ -200,6 +207,12 @@ describe("twilio-status webhook", () => {
       hostSummary: null,
       escalationReason: null,
       urgent: false,
+      originalBody: null,
+      resolvedAt: null,
+      reminderSentAt: null,
+      feedback: null,
+      feedbackNote: null,
+      feedbackAt: null,
     });
     vi.mocked(prisma.message.update).mockResolvedValue({
       id: "msg1",
@@ -219,6 +232,12 @@ describe("twilio-status webhook", () => {
       hostSummary: null,
       escalationReason: null,
       urgent: false,
+      originalBody: null,
+      resolvedAt: null,
+      reminderSentAt: null,
+      feedback: null,
+      feedbackNote: null,
+      feedbackAt: null,
     });
 
     const formData = new FormData();

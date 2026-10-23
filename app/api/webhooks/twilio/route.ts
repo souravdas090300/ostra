@@ -1,6 +1,7 @@
 import { after, NextResponse } from "next/server";
 import twilio from "twilio";
 import { processInbound } from "@/lib/inbound";
+import { log } from "@/lib/log";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +33,7 @@ export async function POST(req: Request) {
         numMedia: Number(params.NumMedia ?? 0),
       });
     } catch {
-      console.error("inbound failed", { sid: MessageSid }); // never log the payload
+      log("error", "inbound failed", { sid: MessageSid }); // never log the payload
     }
   });
   return new NextResponse(EMPTY_TWIML, { headers: { "content-type": "text/xml" } });

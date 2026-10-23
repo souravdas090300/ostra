@@ -109,7 +109,7 @@ export default function PrivacyPage() {
       <section className="space-y-4">
         <h2 className="text-lg font-medium">Opt-out</h2>
         <p className="text-sm text-gray-700">
-          You can opt out of receiving WhatsApp messages at any time by replying "STOP" to any message.
+          You can opt out of receiving WhatsApp messages at any time by replying &quot;STOP&quot; to any message.
           This will stop all future messages for your phone number with that host.
         </p>
       </section>

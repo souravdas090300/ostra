@@ -12,11 +12,12 @@ export default function PasswordChangePage() {
       </div>
 
       <form
-        action={async (formData) => {
+        action={async (formData: FormData) => {
           "use server";
           const result = await changePassword(formData);
           if (result.error) {
-            return result.error;
+            alert(result.error);
+            return;
           }
           redirect("/calendar");
         }}

@@ -3,22 +3,23 @@ import { prisma } from "@/lib/db";
 import { loadInbox, inboxCounts } from "@/lib/inbox-data";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { dismissUnmatched, linkUnmatchedToBooking } from "./actions";
-import { formatPhone } from "@/lib/whatsapp";
+import { formatPhone } from "@/lib/phone";
 import Link from "next/link";
 
-export default async function InboxPage({ searchParams }: { searchParams: { tab?: string } }) {
-  const owner = await requireOwner();
-  const tab = searchParams.tab ?? "needs";
-  const counts = await inboxCounts(owner.id);
+export default async function InboxPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+  const session = await requireOwner();
+  const params = await searchParams;
+  const tab = params.tab ?? "needs";
+  const counts = await inboxCounts(session.user.id);
 
   if (tab === "unknown") {
     const unmatched = await prisma.unmatchedMessage.findMany({
-      where: { ownerId: owner.id, handledAt: null, receivedAt: { gte: new Date(Date.now() - 30 * 86_400_000) } },
+      where: { ownerId: session.user.id, handledAt: null, receivedAt: { gte: new Date(Date.now() - 30 * 86_400_000) } },
       orderBy: { receivedAt: "desc" },
     });
     const bookings = await prisma.booking.findMany({
       where: {
-        apartment: { ownerId: owner.id },
+        apartment: { ownerId: session.user.id },
         isBlock: false,
         status: "CONFIRMED",
         OR: [
@@ -104,7 +105,7 @@ export default async function InboxPage({ searchParams }: { searchParams: { tab?
     );
   }
 
-  const rows = await loadInbox(owner.id);
+  const rows = await loadInbox(session.user.id);
   const filtered = tab === "needs" ? rows.filter((r) => r.unresolved > 0) : rows;
 
   return (

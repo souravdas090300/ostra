@@ -132,6 +132,9 @@ model Message {
   originalBody        String?  // the host's text in her own language, when the sent text is a translation
   resolvedAt          DateTime?
   reminderSentAt      DateTime?
+  feedback            String?  // GOOD, WRONG
+  feedbackNote        String?  // optional, max 300 characters
+  feedbackAt          DateTime?
   createdAt           DateTime @default(now())
 
   @@index([bookingId, createdAt])

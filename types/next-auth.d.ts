@@ -1,4 +1,5 @@
 import type { DefaultSession } from "next-auth";
+import type { JWT } from "next-auth/jwt";
 
 declare module "next-auth" {
   interface Session {
@@ -9,7 +10,6 @@ declare module "next-auth" {
       defaultGuestLanguage: string;
       iat?: number;
     } & DefaultSession["user"];
-    expires: string;
   }
 
   interface User {
@@ -28,3 +28,13 @@ declare module "next-auth/jwt" {
     iat?: number;
   }
 }
+
+export type AuthSession = {
+  user: {
+    id: string;
+    email: string;
+    hostLanguage: string;
+    defaultGuestLanguage: string;
+    iat?: number;
+  };
+};
