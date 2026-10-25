@@ -19,6 +19,9 @@ export default async function SettingsPage() {
       <h1 className="text-xl font-semibold">Settings</h1>
 
       <div className="space-y-2">
+        <Link href="/settings/enquiries" className="block text-blue-600 hover:text-blue-800">
+          Enquiry assistant →
+        </Link>
         <Link href="/settings/messages" className="block text-blue-600 hover:text-blue-800">
           Message templates →
         </Link>

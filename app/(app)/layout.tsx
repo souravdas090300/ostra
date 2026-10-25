@@ -50,10 +50,27 @@ export default async function AppLayout({
                   )}
                 </Link>
                 <Link
+                  href="/leads"
+                  className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+                >
+                  Leads
+                  {counts.leadsNeeds > 0 && (
+                    <span className="ml-1 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-800">
+                      {counts.leadsNeeds}
+                    </span>
+                  )}
+                </Link>
+                <Link
                   href="/assistant/test"
                   className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
                 >
                   Test assistant
+                </Link>
+                <Link
+                  href="/reviews/draft"
+                  className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+                >
+                  Reviews
                 </Link>
                 <Link
                   href="/settings/messages"

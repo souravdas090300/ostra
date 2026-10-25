@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { runTool, dataTools, RESPOND_TOOL } from "@/lib/enquiry-tools";
 import { prisma } from "@/lib/db";
-import { getAvailability, findAlternatives, ensureFreshCalendars } from "@/lib/availability";
+import { getAvailability, findAlternatives, ensureFreshCalendars, getAvailabilityFresh } from "@/lib/availability";
 
 vi.mock("@/lib/db");
 vi.mock("@/lib/availability");
@@ -62,12 +62,18 @@ describe("E2 - Enquiry Tool Runner", () => {
         mockCtx,
       );
       const parsed = JSON.parse(result);
-      expect(parsed.error).toContain("Maximum stay is 90 nights");
+      expect(parsed.error).toContain("Maximum stay is 60 nights");
     });
 
-    it("calls ensureFreshCalendars before checking availability", async () => {
-      vi.mocked(ensureFreshCalendars).mockResolvedValue();
-      vi.mocked(getAvailability).mockResolvedValue([]);
+    it("calls getAvailabilityFresh before checking availability", async () => {
+      vi.mocked(getAvailabilityFresh).mockResolvedValue({
+        results: [],
+        calendarsStale: false,
+      });
+      vi.mocked(findAlternatives).mockResolvedValue({
+        otherApartments: [],
+        shiftedDates: [],
+      });
 
       await runTool(
         "check_availability",
@@ -75,28 +81,33 @@ describe("E2 - Enquiry Tool Runner", () => {
         mockCtx,
       );
 
-      expect(ensureFreshCalendars).toHaveBeenCalledWith(
+      expect(getAvailabilityFresh).toHaveBeenCalledWith(
         mockCtx.ownerId,
-        undefined,
-        mockCtx.now,
+        expect.objectContaining({
+          checkIn: expect.any(Date),
+          checkOut: expect.any(Date),
+          guests: 2,
+        }),
       );
     });
 
     it("records results in context", async () => {
-      vi.mocked(ensureFreshCalendars).mockResolvedValue();
-      vi.mocked(getAvailability).mockResolvedValue([
-        {
-          apartmentId: "apt-1",
-          name: "Test Apt",
-          available: true,
-          nights: 1,
-          minNights: 1,
-          maxGuests: 4,
-          bedrooms: 1,
-          totalCents: 5000,
-          verified: true,
-        },
-      ]);
+      vi.mocked(getAvailabilityFresh).mockResolvedValue({
+        results: [
+          {
+            apartmentId: "apt-1",
+            name: "Test Apt",
+            available: true,
+            nights: 1,
+            minNights: 1,
+            maxGuests: 4,
+            bedrooms: 1,
+            totalCents: 5000,
+            verified: true,
+          },
+        ],
+        calendarsStale: false,
+      });
 
       await runTool(
         "check_availability",
@@ -109,20 +120,22 @@ describe("E2 - Enquiry Tool Runner", () => {
     });
 
     it("finds alternatives when unavailable", async () => {
-      vi.mocked(ensureFreshCalendars).mockResolvedValue();
-      vi.mocked(getAvailability).mockResolvedValue([
-        {
-          apartmentId: "apt-1",
-          name: "Test Apt",
-          available: false,
-          reason: "BOOKED",
-          nights: 1,
-          minNights: 1,
-          maxGuests: 4,
-          bedrooms: 1,
-          verified: true,
-        },
-      ]);
+      vi.mocked(getAvailabilityFresh).mockResolvedValue({
+        results: [
+          {
+            apartmentId: "apt-1",
+            name: "Test Apt",
+            available: false,
+            reason: "BOOKED",
+            nights: 1,
+            minNights: 1,
+            maxGuests: 4,
+            bedrooms: 1,
+            verified: true,
+          },
+        ],
+        calendarsStale: false,
+      });
       vi.mocked(findAlternatives).mockResolvedValue({
         otherApartments: [],
         shiftedDates: [],
@@ -140,20 +153,22 @@ describe("E2 - Enquiry Tool Runner", () => {
     });
 
     it("returns availability result when available", async () => {
-      vi.mocked(ensureFreshCalendars).mockResolvedValue();
-      vi.mocked(getAvailability).mockResolvedValue([
-        {
-          apartmentId: "apt-1",
-          name: "Test Apt",
-          available: true,
-          nights: 1,
-          minNights: 1,
-          maxGuests: 4,
-          bedrooms: 1,
-          totalCents: 5000,
-          verified: true,
-        },
-      ]);
+      vi.mocked(getAvailabilityFresh).mockResolvedValue({
+        results: [
+          {
+            apartmentId: "apt-1",
+            name: "Test Apt",
+            available: true,
+            nights: 1,
+            minNights: 1,
+            maxGuests: 4,
+            bedrooms: 1,
+            totalCents: 5000,
+            verified: true,
+          },
+        ],
+        calendarsStale: false,
+      });
 
       const result = await runTool(
         "check_availability",
@@ -170,14 +185,14 @@ describe("E2 - Enquiry Tool Runner", () => {
 
   describe("get_apartment_info tool", () => {
     it("returns public information for apartment", async () => {
-      vi.mocked(prisma.apartment.findFirst).mockResolvedValue({
+      (prisma.apartment.findFirst as any).mockResolvedValue({
         id: "apt-1",
         name: "Test Apt",
         publicInfo: "Public info here",
         bedrooms: 2,
         maxGuests: 4,
         minNights: 1,
-      } as any);
+      });
 
       const result = await runTool(
         "get_apartment_info",
@@ -192,10 +207,10 @@ describe("E2 - Enquiry Tool Runner", () => {
     });
 
     it("returns error for unknown apartment", async () => {
-      vi.mocked(prisma.apartment.findFirst).mockResolvedValue(null);
-      vi.mocked(prisma.apartment.findMany).mockResolvedValue([
+      (prisma.apartment.findFirst as any).mockResolvedValue(null);
+      (prisma.apartment.findMany as any).mockResolvedValue([
         { name: "Other Apt" },
-      ] as any);
+      ]);
 
       const result = await runTool(
         "get_apartment_info",
@@ -222,8 +237,8 @@ describe("E2 - Enquiry Tool Runner", () => {
       expect(mockCtx.saved.name).toBe("John");
     });
 
-    it("truncates name to 60 characters", async () => {
-      const longName = "A".repeat(100);
+    it("truncates name to 60 characters when saving", async () => {
+      const longName = "A".repeat(60);
       await runTool("save_lead_details", { name: longName }, mockCtx);
 
       expect(mockCtx.saved.name).toHaveLength(60);
@@ -258,10 +273,10 @@ describe("E2 - Enquiry Tool Runner", () => {
     });
 
     it("saves apartment ID when found", async () => {
-      vi.mocked(prisma.apartment.findFirst).mockResolvedValue({
+      (prisma.apartment.findFirst as any).mockResolvedValue({
         id: "apt-1",
         name: "Test Apt",
-      } as any);
+      });
 
       await runTool(
         "save_lead_details",

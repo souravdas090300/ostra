@@ -54,7 +54,13 @@ export async function processInbound(i: InboundInput, now = new Date()): Promise
   if (!body && !hasMedia) return;
 
   const match = await matchBooking(owner.id, from, now);
-  if (!match) return handleEnquiry({ sid: i.sid, from, to, body, numMedia: i.numMedia }, now);
+  if (!match) {
+    // Check if enquiries are enabled
+    if (!owner.enquiriesEnabled) {
+      return handleUnmatched(owner.id, from, i.sid, body, hasMedia, now);
+    }
+    return handleEnquiry({ sid: i.sid, from, to, body, numMedia: i.numMedia }, now);
+  }
   const { booking } = match;
   const apartment = booking.apartment;
 

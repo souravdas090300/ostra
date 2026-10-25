@@ -58,6 +58,66 @@ export async function eraseGuestData(ownerId: string, bookingId: string, scope: 
   return { bookingsAffected: bookingIds.length };
 }
 
+export async function eraseLeadData(ownerId: string, leadId: string, scope: "lead" | "phone") {
+  const lead = await prisma.lead.findUnique({
+    where: { id: leadId },
+  });
+
+  if (!lead || lead.ownerId !== ownerId) {
+    throw new Error("Lead not found");
+  }
+
+  let leadIds = [leadId];
+  if (scope === "phone") {
+    const samePhone = await prisma.lead.findMany({
+      where: {
+        ownerId,
+        phone: lead.phone,
+      },
+      select: { id: true },
+    });
+    leadIds = samePhone.map((l) => l.id);
+  }
+
+  const phone = lead.phone;
+
+  const result = await prisma.$transaction([
+    prisma.leadMessage.deleteMany({ where: { leadId: { in: leadIds } } }),
+    prisma.unmatchedMessage.deleteMany({
+      where: {
+        ownerId,
+        phone: phone ?? undefined,
+      },
+    }),
+    prisma.lead.updateMany({
+      where: { id: { in: leadIds } },
+      data: {
+        name: null,
+        phone: null,
+        notes: null,
+        checkIn: null,
+        checkOut: null,
+        guests: null,
+        quotedCents: null,
+        needsHostReason: null,
+        hostSummary: null,
+        language: null,
+        status: "LOST",
+      },
+    }),
+    prisma.auditLog.create({
+      data: {
+        ownerId,
+        action: "ERASE_LEAD",
+        targetType: "lead",
+        targetId: leadId,
+      },
+    }),
+  ]);
+
+  return { leadsAffected: leadIds.length };
+}
+
 export async function collectGuestData(ownerId: string, bookingIds: string[]) {
   const bookings = await prisma.booking.findMany({
     where: { id: { in: bookingIds }, apartment: { ownerId } },
@@ -112,6 +172,53 @@ export async function collectGuestData(ownerId: string, bookingIds: string[]) {
       phone: m.phone,
       body: m.body,
       receivedAt: m.receivedAt,
+    })),
+  };
+}
+
+export async function collectLeadData(ownerId: string, leadIds: string[]) {
+  const leads = await prisma.lead.findMany({
+    where: { id: { in: leadIds }, ownerId },
+    include: {
+      apartment: { select: { name: true } },
+      messages: true,
+    },
+  });
+
+  if (leads.length === 0) {
+    throw new Error("No leads found");
+  }
+
+  return {
+    leads: leads.map((l) => ({
+      id: l.id,
+      phone: l.phone,
+      name: l.name,
+      status: l.status,
+      checkIn: l.checkIn,
+      checkOut: l.checkOut,
+      guests: l.guests,
+      apartmentName: l.apartment?.name,
+      quotedCents: l.quotedCents,
+      language: l.language,
+      notes: l.notes,
+      hostSummary: l.hostSummary,
+      needsHostReason: l.needsHostReason,
+      urgent: l.urgent,
+      lastInboundAt: l.lastInboundAt,
+      lastOutboundAt: l.lastOutboundAt,
+      messages: l.messages.map((m) => ({
+        direction: m.direction,
+        author: m.author,
+        body: m.body,
+        originalBody: m.originalBody,
+        language: m.language,
+        createdAt: m.createdAt,
+        deliveryStatus: m.deliveryStatus,
+        escalated: m.escalated,
+        urgent: m.urgent,
+        resolved: m.resolved,
+      })),
     })),
   };
 }
