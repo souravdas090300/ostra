@@ -9,6 +9,7 @@
  * - sync-templates: Sync template approval status from Twilio
  * - sync-calendars: Sync calendar feeds (existing Phase 3 job)
  * - weekly-summary: Send weekly summary emails to owners
+ * - lead-follow-ups: Send follow-up messages to quiet leads (Phase 12)
  */
 
 import { config } from "dotenv";
@@ -23,7 +24,7 @@ const job = process.argv[2];
 
 if (!job) {
   console.error("Usage: node scripts/run-cron.mjs <job-name>");
-  console.error("Available jobs: send-scheduled, sync-templates, sync-calendars, weekly-summary");
+  console.error("Available jobs: send-scheduled, sync-templates, sync-calendars, weekly-summary, lead-follow-ups");
   process.exit(1);
 }
 
@@ -65,4 +66,4 @@ async function runJob() {
   }
 }
 
-runJob();
+await runJob();

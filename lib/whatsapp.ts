@@ -1,14 +1,17 @@
-import twilio from "twilio";
 import { recordUsage } from "./usage";
+import {
+  sendMetaTextMessage,
+  sendMetaTemplateMessage,
+  whatsappMode as metaWhatsappMode,
+  WhatsAppError as MetaWhatsAppError,
+  type WhatsAppMode,
+} from "./meta-whatsapp";
 
 type UsageKind = "AI_REPLY" | "AI_TRANSLATE" | "AI_TEMPLATE" | "WA_TEMPLATE" | "WA_FREEFORM";
 
-export type WhatsAppMode = "dry-run" | "sandbox" | "production";
+export { WhatsAppMode, whatsappMode as metaWhatsappMode };
 
-export const whatsappMode = (): WhatsAppMode => {
-  const m = process.env.WHATSAPP_MODE;
-  return m === "sandbox" || m === "production" ? m : "dry-run"; // anything else is dry-run
-};
+export const whatsappMode = (): WhatsAppMode => metaWhatsappMode();
 
 export class WhatsAppError extends Error {
   constructor(message: string, public permanent: boolean, public code?: number) {
@@ -16,20 +19,15 @@ export class WhatsAppError extends Error {
   }
 }
 
-let client: ReturnType<typeof twilio> | null = null;
-
-const getClient = () =>
-  (client ??= twilio(process.env.TWILIO_ACCOUNT_SID!, process.env.TWILIO_AUTH_TOKEN!));
-
 export type SendInput = {
   to: string; // E.164
   text: string; // rendered text (used for free-form and for our own record)
-  template?: { contentSid: string; variables: Record<string, string> }; // numbered: {"1": "...", "2": "..."}
+  template?: { name: string; languageCode: string; components?: Array<{ type: string; parameters: Array<{ type: string; text: string }> }> };
   ownerId?: string;
   kind?: UsageKind;
 };
 
-/** Returns the Twilio message SID, or null in dry-run. Throws WhatsAppError. */
+/** Returns the Meta message ID, or null in dry-run. Throws WhatsAppError. */
 export async function sendWhatsApp(input: SendInput): Promise<{ sid: string | null }> {
   const mode = whatsappMode();
   if (mode === "dry-run") {
@@ -40,33 +38,46 @@ export async function sendWhatsApp(input: SendInput): Promise<{ sid: string | nu
     return { sid: null };
   }
 
+  const from = process.env.META_WHATSAPP_PHONE_NUMBER_ID!;
+  const accessToken = process.env.META_ACCESS_TOKEN!;
+
+  if (!from || !accessToken) {
+    throw new WhatsAppError("META_WHATSAPP_PHONE_NUMBER_ID and META_ACCESS_TOKEN are required", true);
+  }
+
   try {
-    const base = {
-      from: process.env.TWILIO_WHATSAPP_FROM!,
-      to: `whatsapp:${input.to}`,
-      statusCallback: `${process.env.APP_URL}/api/webhooks/twilio-status`,
-    };
-    const msg =
-      mode === "production" && input.template
-        ? await getClient().messages.create({
-            ...base,
-            contentSid: input.template.contentSid,
-            contentVariables: JSON.stringify(input.template.variables),
-          })
-        : await getClient().messages.create({ ...base, body: input.text });
+    let result;
+
+    if (mode === "production" && input.template) {
+      // Send template message
+      result = await sendMetaTemplateMessage({
+        to: input.to.replace(/^\+/, ""), // Remove + if present
+        from,
+        templateName: input.template.name,
+        languageCode: input.template.languageCode,
+        components: input.template.components,
+        accessToken,
+      });
+    } else {
+      // Send text message
+      result = await sendMetaTextMessage({
+        to: input.to.replace(/^\+/, ""), // Remove + if present
+        from,
+        text: input.text,
+        accessToken,
+      });
+    }
+
     // Record usage after successful send
     if (input.ownerId && input.kind) {
       await recordUsage(input.ownerId, input.kind);
     }
-    return { sid: msg.sid };
-  } catch (e: unknown) {
-    const status: number | undefined = e instanceof Object && "status" in e ? (e as { status?: number }).status : undefined;
-    const permanent = typeof status === "number" && status >= 400 && status < 500 && status !== 429;
-    const code: number | undefined = e instanceof Object && "code" in e ? (e as { code?: number }).code : undefined;
-    throw new WhatsAppError(
-      "WhatsApp send failed",
-      permanent,
-      code,
-    );
+
+    return { sid: result.messageId };
+  } catch (e) {
+    if (e instanceof MetaWhatsAppError) {
+      throw new WhatsAppError(e.message, e.permanent, e.code);
+    }
+    throw new WhatsAppError("WhatsApp send failed", false);
   }
 }

@@ -324,6 +324,7 @@ model Lead {
   blockedAt          DateTime?                     // host blocked this number: no reply, nothing stored
   lastInboundAt      DateTime   @default(now())
   lastOutboundAt     DateTime?
+  followUpSentAt     DateTime?                     // Phase 12: when follow-up message was sent
   hostSummary        String?                       // for the host, in the host's language
   needsHostReason    String?
   urgent             Boolean    @default(false)
