@@ -26,7 +26,7 @@ export default async function BookingDetailPage({
   const sp = await searchParams;
 
   const booking = await prisma.booking.findFirst({
-    where: { id, apartment: { ownerId: owner.user.id } },
+    where: { id, apartment: { ownerId: owner.id } },
     include: {
       apartment: {
         include: {
@@ -48,7 +48,7 @@ export default async function BookingDetailPage({
   const now = new Date();
 
   // Check for overlaps
-  const overlaps = await findOverlaps(owner.user.id, booking.apartmentId, inYmd, outYmd, booking.id);
+  const overlaps = await findOverlaps(owner.id, booking.apartmentId, inYmd, outYmd, booking.id);
   const bookingOverlap = overlaps.find((o) => o.kind === "BOOKING");
 
   // Check for guest count exceed
@@ -226,7 +226,7 @@ export default async function BookingDetailPage({
                   notes: booking.notes ?? "",
                   guestOptIn: !!booking.optedInAt ? "true" : "",
                 }}
-                defaultGuestLanguageName={getLanguage(owner.user.defaultGuestLanguage)?.name ?? "English"}
+                defaultGuestLanguageName={getLanguage(owner.defaultGuestLanguage)?.name ?? "English"}
                 submitLabel="Save"
               />
             </div>

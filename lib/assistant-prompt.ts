@@ -9,6 +9,8 @@ export type PromptInput = {
   unlocked: boolean;
   today: string; // Malta date YYYY-MM-DD
   knownLanguage: string | null;
+  ownerName?: string;
+  apartmentNames?: string[];
 };
 
 export function buildSystemPrompt(p: PromptInput): string {

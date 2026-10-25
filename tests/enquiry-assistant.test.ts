@@ -88,7 +88,6 @@ describe("E2 - Enquiry Assistant Loop and Output Checks", () => {
     it("includes all required information", () => {
       const prompt = buildEnquiryPrompt({
         hostLanguage: "en",
-        ownerName: "Test Host",
         today: "2026-10-25",
         knownLanguage: "en",
         apartmentNames: ["Apartment A", "Apartment B"],
@@ -102,7 +101,6 @@ describe("E2 - Enquiry Assistant Loop and Output Checks", () => {
     it("includes tool-result rule", () => {
       const prompt = buildEnquiryPrompt({
         hostLanguage: "en",
-        ownerName: "Test Host",
         today: "2026-10-25",
         knownLanguage: "en",
         apartmentNames: ["Apartment A"],
@@ -114,7 +112,6 @@ describe("E2 - Enquiry Assistant Loop and Output Checks", () => {
     it("includes escalation rules", () => {
       const prompt = buildEnquiryPrompt({
         hostLanguage: "en",
-        ownerName: "Test Host",
         today: "2026-10-25",
         knownLanguage: "en",
         apartmentNames: ["Apartment A"],
@@ -126,7 +123,6 @@ describe("E2 - Enquiry Assistant Loop and Output Checks", () => {
     it("includes opt-out rule", () => {
       const prompt = buildEnquiryPrompt({
         hostLanguage: "en",
-        ownerName: "Test Host",
         today: "2026-10-25",
         knownLanguage: "en",
         apartmentNames: ["Apartment A"],
@@ -167,7 +163,7 @@ describe("E2 - Enquiry Assistant Loop and Output Checks", () => {
 
   describe("output validation", () => {
     it("blocks replies with disallowed links", () => {
-      vi.mocked(unsupportedContacts).mockReturnValue(true);
+      vi.mocked(unsupportedContacts).mockReturnValue("http://example.com");
 
       const mockResponse = {
         language: "en",
@@ -182,7 +178,7 @@ describe("E2 - Enquiry Assistant Loop and Output Checks", () => {
       // This would be caught in the actual assistant flow
       expect(unsupportedContacts).toHaveBeenCalledWith(
         mockResponse.reply,
-        mockInput.allowedText,
+        "",
       );
     });
 

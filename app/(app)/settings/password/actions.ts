@@ -52,8 +52,8 @@ export async function changePassword(formData: FormData): Promise<{ error?: stri
   }
 
   // Check not equal to email
-  const emailLocal = session.user.email.split("@")[0].toLowerCase();
-  if (newPassword.toLowerCase().includes(emailLocal) || newPassword.toLowerCase() === session.user.email.toLowerCase()) {
+  const emailLocal = session.email.split("@")[0].toLowerCase();
+  if (newPassword.toLowerCase().includes(emailLocal) || newPassword.toLowerCase() === session.email.toLowerCase()) {
     return { error: "Password cannot contain your email." };
   }
 
@@ -64,7 +64,7 @@ export async function changePassword(formData: FormData): Promise<{ error?: stri
 
   // Verify current password
   const currentOwner = await prisma.owner.findUnique({
-    where: { id: session.user.id },
+    where: { id: session.id },
     select: { passwordHash: true },
   });
 
@@ -80,7 +80,7 @@ export async function changePassword(formData: FormData): Promise<{ error?: stri
   // Update password
   const passwordHash = await bcrypt.hash(newPassword, 12);
   await prisma.owner.update({
-    where: { id: session.user.id },
+    where: { id: session.id },
     data: {
       passwordHash,
       passwordChangedAt: new Date(),
@@ -90,10 +90,10 @@ export async function changePassword(formData: FormData): Promise<{ error?: stri
   // Write audit log
   await prisma.auditLog.create({
     data: {
-      ownerId: session.user.id,
+      ownerId: session.id,
       action: "PASSWORD_CHANGED",
       targetType: "owner",
-      targetId: session.user.id,
+      targetId: session.id,
     },
   });
 

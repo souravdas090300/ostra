@@ -92,8 +92,6 @@ export async function eraseLeadData(ownerId: string, leadId: string, scope: "lea
     prisma.lead.updateMany({
       where: { id: { in: leadIds } },
       data: {
-        name: null,
-        phone: null,
         notes: null,
         checkIn: null,
         checkOut: null,

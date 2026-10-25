@@ -1,7 +1,7 @@
-import { requireOwner } from "@/lib/auth";
 import { collectLeadData } from "@/lib/guest-data";
 import { prisma } from "@/lib/db";
 import { NextResponse } from "next/server";
+import { requireOwner } from "@/lib/auth";
 
 export async function GET(req: Request) {
   const session = await requireOwner();
@@ -18,14 +18,14 @@ export async function GET(req: Request) {
     where: { id: leadId },
   });
 
-  if (!lead || lead.ownerId !== session.user.id) {
+  if (!lead || lead.ownerId !== session.id) {
     return NextResponse.json({ error: "Lead not found" }, { status: 404 });
   }
 
   // Audit log
   await prisma.auditLog.create({
     data: {
-      ownerId: session.user.id,
+      ownerId: session.id,
       action: "EXPORT_LEAD",
       targetType: "lead",
       targetId: leadId,
@@ -35,14 +35,14 @@ export async function GET(req: Request) {
   const leadIds = scope === "phone"
     ? (await prisma.lead.findMany({
         where: {
-          ownerId: session.user.id,
+          ownerId: session.id,
           phone: lead.phone,
         },
         select: { id: true },
       })).map((l) => l.id)
     : [leadId];
 
-  const data = await collectLeadData(session.user.id, leadIds);
+  const data = await collectLeadData(session.id, leadIds);
 
   return NextResponse.json(data, {
     headers: {

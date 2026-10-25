@@ -15,7 +15,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "scope must be 'booking' or 'phone'" }, { status: 400 });
   }
 
-  const result = await eraseGuestData(session.user.id, bookingId, scope);
+  const result = await eraseGuestData(session.id, bookingId, scope);
 
   return NextResponse.json(result);
 }

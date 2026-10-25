@@ -5,7 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requireOwner } from "@/lib/auth";
 import {
-  apartmentSchema, feedSchema, settingsSchema, isSafeFeedUrl, toCents,
+  apartmentSchema, feedSchema, settingsSchema, isSafeFeedUrl, toCents, echo, validateRateData, validateDateRange,
 } from "@/lib/validation";
 import { syncFeed } from "@/lib/sync";
 import { rescheduleBookings } from "@/lib/schedule";
@@ -13,9 +13,6 @@ import { rescheduleBookings } from "@/lib/schedule";
 export type FormState =
   | { error?: string; fieldErrors?: Record<string, string[] | undefined>; ok?: boolean; submitted?: Record<string, string> }
   | undefined;
-
-const echo = (fd: FormData): Record<string, string> =>
-  Object.fromEntries([...fd.entries()].filter(([, v]) => typeof v === "string")) as Record<string, string>;
 
 function apartmentData(formData: FormData) {
   const parsed = apartmentSchema.safeParse(Object.fromEntries(formData));
@@ -37,7 +34,7 @@ export async function createApartment(_prev: FormState, formData: FormData): Pro
   const submitted = echo(formData);
   const r = apartmentData(formData);
   if (!r.data) return { ...r.state, submitted };
-  const apartment = await prisma.apartment.create({ data: { ...r.data, ownerId: session.user.id } });
+  const apartment = await prisma.apartment.create({ data: { ...r.data, ownerId: session.id } });
   revalidatePath("/apartments");
   redirect(`/apartments/${apartment.id}`);
 }
@@ -49,7 +46,7 @@ export async function updateApartment(id: string, _prev: FormState, formData: Fo
   if (!r.data) return { ...r.state, submitted };
 
   const existing = await prisma.apartment.findFirst({
-    where: { id, ownerId: session.user.id },
+    where: { id, ownerId: session.id },
     select: { reviewUrl: true },
   });
   if (!existing) notFound();
@@ -57,7 +54,7 @@ export async function updateApartment(id: string, _prev: FormState, formData: Fo
   const reviewUrlChanged = r.data.reviewUrl !== existing.reviewUrl;
 
   const { count } = await prisma.apartment.updateMany({
-    where: { id, ownerId: session.user.id }, // ownership enforced in the query
+    where: { id, ownerId: session.id }, // ownership enforced in the query
     data: r.data,
   });
   if (count === 0) notFound();
@@ -84,7 +81,7 @@ export async function updateApartment(id: string, _prev: FormState, formData: Fo
 
 export async function deleteApartment(id: string): Promise<void> {
   const session = await requireOwner();
-  const { count } = await prisma.apartment.deleteMany({ where: { id, ownerId: session.user.id } });
+  const { count } = await prisma.apartment.deleteMany({ where: { id, ownerId: session.id } });
   if (count === 0) notFound();
   revalidatePath("/apartments");
   redirect("/apartments");
@@ -94,7 +91,7 @@ export async function addFeed(apartmentId: string, _prev: FormState, formData: F
   const session = await requireOwner();
   const submitted = echo(formData);
   const apartment = await prisma.apartment.findFirst({
-    where: { id: apartmentId, ownerId: session.user.id },
+    where: { id: apartmentId, ownerId: session.id },
     include: { _count: { select: { feeds: true } } },
   });
   if (!apartment) notFound();
@@ -119,7 +116,7 @@ export async function addFeed(apartmentId: string, _prev: FormState, formData: F
 export async function removeFeed(feedId: string, apartmentId: string): Promise<void> {
   const session = await requireOwner();
   const feed = await prisma.calendarFeed.findFirst({
-    where: { id: feedId, apartment: { ownerId: session.user.id } },
+    where: { id: feedId, apartment: { ownerId: session.id } },
   });
   if (!feed) return;
   await prisma.$transaction([
@@ -136,7 +133,7 @@ export async function updateSettings(_prev: FormState, formData: FormData): Prom
   const session = await requireOwner();
   const parsed = settingsSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { fieldErrors: parsed.error.flatten().fieldErrors };
-  await prisma.owner.update({ where: { id: session.user.id }, data: parsed.data });
+  await prisma.owner.update({ where: { id: session.id }, data: parsed.data });
   revalidatePath("/settings");
   return { ok: true };
 }
@@ -144,7 +141,7 @@ export async function updateSettings(_prev: FormState, formData: FormData): Prom
 export async function syncFeedNow(feedId: string): Promise<{ ok: boolean; message: string }> {
   const owner = await requireOwner();
   const feed = await prisma.calendarFeed.findFirst({
-    where: { id: feedId, apartment: { ownerId: owner.user.id } },
+    where: { id: feedId, apartment: { ownerId: owner.id } },
   });
   if (!feed) notFound();
   if (feed.lastSyncAt && Date.now() - feed.lastSyncAt.getTime() < 60_000) {
@@ -162,7 +159,7 @@ export async function addRate(apartmentId: string, _prev: FormState, formData: F
   const session = await requireOwner();
   const submitted = echo(formData);
   const apartment = await prisma.apartment.findFirst({
-    where: { id: apartmentId, ownerId: session.user.id },
+    where: { id: apartmentId, ownerId: session.id },
     include: { _count: { select: { rates: true } } },
   }) as any;
   if (!apartment) notFound();
@@ -173,29 +170,12 @@ export async function addRate(apartmentId: string, _prev: FormState, formData: F
   const nightlyEuros = Number(formData.get("nightlyEuros"));
   const minNightsStr = formData.get("minNights") as string | null;
 
-  if (!startDateStr || !endDateStr) {
-    return { fieldErrors: { startDate: ["Required"], endDate: ["Required"] }, submitted };
-  }
+  const validationErrors = validateRateData(startDateStr, endDateStr, nightlyEuros, minNightsStr);
+  if (validationErrors) return { ...validationErrors, submitted };
 
   const startDate = new Date(startDateStr);
   const endDate = new Date(endDateStr);
-
-  if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-    return { fieldErrors: { startDate: ["Invalid date"], endDate: ["Invalid date"] }, submitted };
-  }
-
-  if (endDate < startDate) {
-    return { fieldErrors: { endDate: ["End date cannot be before start date"] }, submitted };
-  }
-
-  if (nightlyEuros < 0 || nightlyEuros > 10000) {
-    return { fieldErrors: { nightlyEuros: ["Price must be between 0 and 10000 euros"] }, submitted };
-  }
-
   const minNights = minNightsStr ? Number(minNightsStr) : null;
-  if (minNights !== null && (minNights < 1 || minNights > 60)) {
-    return { fieldErrors: { minNights: ["Minimum nights must be between 1 and 60"] }, submitted };
-  }
 
   await (prisma as any).rate.create({
     data: {
@@ -216,7 +196,7 @@ export async function updateRate(rateId: string, _prev: FormState, formData: For
   const submitted = echo(formData);
 
   const rate = await (prisma as any).rate.findFirst({
-    where: { id: rateId, apartment: { ownerId: session.user.id } },
+    where: { id: rateId, apartment: { ownerId: session.id } },
   });
   if (!rate) notFound();
 
@@ -225,29 +205,12 @@ export async function updateRate(rateId: string, _prev: FormState, formData: For
   const nightlyEuros = Number(formData.get("nightlyEuros"));
   const minNightsStr = formData.get("minNights") as string | null;
 
-  if (!startDateStr || !endDateStr) {
-    return { fieldErrors: { startDate: ["Required"], endDate: ["Required"] }, submitted };
-  }
+  const validationErrors = validateRateData(startDateStr, endDateStr, nightlyEuros, minNightsStr);
+  if (validationErrors) return { ...validationErrors, submitted };
 
   const startDate = new Date(startDateStr);
   const endDate = new Date(endDateStr);
-
-  if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-    return { fieldErrors: { startDate: ["Invalid date"], endDate: ["Invalid date"] }, submitted };
-  }
-
-  if (endDate < startDate) {
-    return { fieldErrors: { endDate: ["End date cannot be before start date"] }, submitted };
-  }
-
-  if (nightlyEuros < 0 || nightlyEuros > 10000) {
-    return { fieldErrors: { nightlyEuros: ["Price must be between 0 and 10000 euros"] }, submitted };
-  }
-
   const minNights = minNightsStr ? Number(minNightsStr) : null;
-  if (minNights !== null && (minNights < 1 || minNights > 60)) {
-    return { fieldErrors: { minNights: ["Minimum nights must be between 1 and 60"] }, submitted };
-  }
 
   await (prisma as any).rate.update({
     where: { id: rateId },
@@ -266,7 +229,7 @@ export async function updateRate(rateId: string, _prev: FormState, formData: For
 export async function deleteRate(rateId: string): Promise<FormState> {
   const session = await requireOwner();
   const rate = await (prisma as any).rate.findFirst({
-    where: { id: rateId, apartment: { ownerId: session.user.id } },
+    where: { id: rateId, apartment: { ownerId: session.id } },
   });
   if (!rate) notFound();
   await (prisma as any).rate.delete({ where: { id: rateId } });
@@ -282,23 +245,21 @@ export async function tryDates(
 ): Promise<{ ok: boolean; result?: any; error?: string }> {
   const session = await requireOwner();
   const apartment = await prisma.apartment.findFirst({
-    where: { id: apartmentId, ownerId: session.user.id },
+    where: { id: apartmentId, ownerId: session.id },
   });
   if (!apartment) return { ok: false, error: "Apartment not found" };
+
+  const validationErrors = validateDateRange(checkIn, checkOut);
+  if (validationErrors) {
+    const error = validationErrors.fieldErrors?.endDate?.[0] || validationErrors.fieldErrors?.startDate?.[0] || "Invalid dates";
+    return { ok: false, error };
+  }
 
   const checkInDate = new Date(checkIn);
   const checkOutDate = new Date(checkOut);
 
-  if (isNaN(checkInDate.getTime()) || isNaN(checkOutDate.getTime())) {
-    return { ok: false, error: "Invalid dates" };
-  }
-
-  if (checkOutDate <= checkInDate) {
-    return { ok: false, error: "Check-out must be after check-in" };
-  }
-
   const { getAvailability } = await import("@/lib/availability");
-  const results = await getAvailability(session.user.id, {
+  const results = await getAvailability(session.id, {
     checkIn: checkInDate,
     checkOut: checkOutDate,
     guests,

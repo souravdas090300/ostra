@@ -14,7 +14,7 @@ export default async function UsagePage() {
 
   const [ownerData, currentUsage, previousUsage, twoMonthsAgoUsage] = await Promise.all([
     prisma.owner.findUnique({
-      where: { id: session.user.id },
+      where: { id: session.id },
       select: {
         monthlyAiBudgetCents: true,
         monthlyTemplateCap: true,
@@ -22,15 +22,15 @@ export default async function UsagePage() {
       },
     }),
     prisma.usageDaily.findMany({
-      where: { ownerId: session.user.id, day: { gte: currentMonthStart } },
+      where: { ownerId: session.id, day: { gte: currentMonthStart } },
       select: { kind: true, count: true, inputTokens: true, outputTokens: true },
     }),
     prisma.usageDaily.findMany({
-      where: { ownerId: session.user.id, day: { gte: previousMonthStart, lt: currentMonthStart } },
+      where: { ownerId: session.id, day: { gte: previousMonthStart, lt: currentMonthStart } },
       select: { kind: true, count: true, inputTokens: true, outputTokens: true },
     }),
     prisma.usageDaily.findMany({
-      where: { ownerId: session.user.id, day: { gte: twoMonthsAgoStart, lt: previousMonthStart } },
+      where: { ownerId: session.id, day: { gte: twoMonthsAgoStart, lt: previousMonthStart } },
       select: { kind: true, count: true, inputTokens: true, outputTokens: true },
     }),
   ]);
@@ -79,8 +79,8 @@ export default async function UsagePage() {
   const previous = summarize(previousUsage);
   const twoMonthsAgo = summarize(twoMonthsAgoUsage);
 
-  const currentAiCostCents = await monthlyAiCostCents(session.user.id, now);
-  const currentTemplateCount = await monthlyCount(session.user.id, "WA_TEMPLATE", now);
+  const currentAiCostCents = await monthlyAiCostCents(session.id, now);
+  const currentTemplateCount = await monthlyCount(session.id, "WA_TEMPLATE", now);
 
   const aiPercent = (currentAiCostCents / ownerData.monthlyAiBudgetCents) * 100;
   const templatePercent = (currentTemplateCount / ownerData.monthlyTemplateCap) * 100;

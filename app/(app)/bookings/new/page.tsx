@@ -15,7 +15,7 @@ export default async function NewBookingPage({
   const sp = await searchParams;
 
   const apartments = await prisma.apartment.findMany({
-    where: { ownerId: owner.user.id },
+    where: { ownerId: owner.id },
     orderBy: { name: "asc" },
     select: { id: true, name: true },
   });
@@ -64,7 +64,7 @@ export default async function NewBookingPage({
           guestOptIn: "false",
         }}
         apartments={apartments}
-        defaultGuestLanguageName={getLanguage(owner.user.defaultGuestLanguage)?.name ?? "English"}
+        defaultGuestLanguageName={getLanguage(owner.defaultGuestLanguage)?.name ?? "English"}
         submitLabel="Create booking"
       />
     </div>

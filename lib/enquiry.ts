@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
-import { answerEnquiry, buildEnquiryHistory, holdingText, type EnquiryOutput } from "./enquiry-assistant";
+import { answerEnquiry, buildEnquiryHistory, holdingText, fallbackOutput, type EnquiryOutput } from "./enquiry-assistant";
 import { isStopKeyword } from "./guards";
 import { normaliseLanguage } from "./languages";
 import { notifyHost } from "./notify";
@@ -12,24 +12,7 @@ import { assistantEnabled } from "./flags";
 import { assertAiBudget, recordUsage, checkAndSendBudgetWarning, BudgetExceededError } from "./usage";
 import { getAnthropic } from "./flags";
 import type { TurnContext } from "./enquiry-tools";
-
-const HOUR = 3_600_000;
-const E164 = /^\+\d{8,15}$/;
-const STOP_CONFIRM: Record<string, string> = {
-  en: "You will no longer receive messages from us.",
-  it: "Non riceverai più messaggi da noi.",
-  de: "Sie erhalten keine Nachrichten mehr von uns.",
-  fr: "Vous ne recevrez plus de messages de notre part.",
-  es: "Ya no recibirá mensajes nuestros.",
-};
-
-export type InboundInput = {
-  sid: string;
-  from: string;
-  to: string;
-  body: string;
-  numMedia: number;
-};
+import { HOUR, E164, STOP_CONFIRM, type InboundInput } from "./shared-constants";
 
 export async function handleEnquiry(i: InboundInput, now = new Date()): Promise<void> {
   const from = i.from.replace(/^whatsapp:/, "");
@@ -114,6 +97,7 @@ export async function handleEnquiry(i: InboundInput, now = new Date()): Promise<
       reason: "Assistant limit reached, no reply was sent.",
       urgent: false,
       hostSummary: "A guest wrote to you but the assistant's daily limit was reached. Please reply yourself.",
+      sendFailed: false,
     });
     return;
   }
@@ -162,6 +146,7 @@ export async function handleEnquiry(i: InboundInput, now = new Date()): Promise<
         reason: "Monthly AI budget reached, no reply was sent.",
         urgent: false,
         hostSummary: "A guest wrote to you but the monthly AI budget was reached. Please reply yourself.",
+        sendFailed: false,
       });
       return;
     }
@@ -196,7 +181,6 @@ export async function handleEnquiry(i: InboundInput, now = new Date()): Promise<
   try {
     out = await answerEnquiry({
       hostLanguage: owner.hostLanguage,
-      ownerName: owner.name,
       today: todayMalta(now),
       knownLanguage: lead.language,
       apartmentNames: apartments.map((a) => a.name),

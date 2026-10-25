@@ -4,14 +4,13 @@ import { withJobRun } from "@/lib/job-run";
 import { notifyHost } from "@/lib/notify";
 import { revalidatePath } from "next/cache";
 import { linkState } from "@/lib/export-feeds";
+import { requireCronAuth } from "@/lib/cron-auth";
 
 const OPERATOR_EMAIL = process.env.OPERATOR_EMAIL;
 
 export async function POST(req: Request) {
-  const authHeader = req.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return new Response("Unauthorized", { status: 401 });
-  }
+  const authError = requireCronAuth(req);
+  if (authError) return authError;
 
   const result = await withJobRun("self-check", async () => {
     const now = new Date();
@@ -171,6 +170,7 @@ async function checkStaleJobs(now: Date): Promise<string[]> {
     "sync-templates": 3 * 60 * 60_000,
     "retention": 36 * 60 * 60_000,
     "inbound-recovery": 20 * 60_000,
+    "weekly-summary": 8 * 24 * 60 * 60_000, // 8 days
   };
 
   for (const [job, threshold] of Object.entries(thresholds)) {

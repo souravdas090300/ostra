@@ -15,7 +15,7 @@ async function main() {
   const owner = await prisma.owner.upsert({
     where: { email },
     update: {}, // never overwrite an existing password
-    create: { email, name: "Host", passwordHash: await bcrypt.hash(password, 12) },
+    create: { email, passwordHash: await bcrypt.hash(password, 12) },
   });
   if (production) return;
 
@@ -27,7 +27,7 @@ async function main() {
     });
     if (!exists) {
       await prisma.apartment.create({
-        data: { ownerId: owner.id, name, address: `${name}, Malta`, info: "" },
+        data: { ownerId: owner.id, name, address: `${name}, Malta`, info: "", checkInTime: "14:00", checkOutTime: "11:00" },
       });
     }
   }

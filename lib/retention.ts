@@ -54,7 +54,7 @@ export async function runRetention(now = new Date(), dryRun = false) {
       const lm = await prisma.leadMessage.deleteMany({ where: { leadId: { in: ids } } });
       await prisma.lead.updateMany({
         where: { id: { in: ids } },
-        data: { name: null, phone: null, notes: null, checkIn: null, checkOut: null, guests: null, quotedCents: null, needsHostReason: null, hostSummary: null },
+        data: { notes: null, checkIn: null, checkOut: null, guests: null, quotedCents: null, needsHostReason: null, hostSummary: null },
       });
       out.leadMessages += lm.count;
     }

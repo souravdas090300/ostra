@@ -28,7 +28,8 @@ export const authConfig: NextAuthConfig = {
         return {
           id: owner.id,
           email: owner.email,
-          name: owner.name ?? undefined,
+          hostLanguage: owner.hostLanguage,
+          defaultGuestLanguage: owner.defaultGuestLanguage,
         };
       },
     }),

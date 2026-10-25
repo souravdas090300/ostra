@@ -10,11 +10,11 @@ import { DeleteButton } from "@/components/DeleteButton";
 import { updateApartment, deleteApartment } from "../actions";
 import { ensureExportFeeds } from "../export-actions";
 
-export default async function ApartmentPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ApartmentPage({ params }: Readonly<{ params: Promise<{ id: string }> }>) {
   const { id } = await params;
   const session = await requireOwner();
   const a = await prisma.apartment.findFirst({
-    where: { id, ownerId: session.user.id },
+    where: { id, ownerId: session.id },
     include: { feeds: true, exportFeeds: true, rates: true },
   }) as any;
   if (!a) notFound();

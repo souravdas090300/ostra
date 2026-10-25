@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "description": "See OSTRA_PLAN.md for the build plan.",
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "cross-env TZ=UTC next dev",
     "build": "prisma generate && next build",
@@ -25,11 +27,12 @@
     "@neon/env": "^1.6.3",
     "@prisma/client": "^5.22.0",
     "@sentry/nextjs": "^11.8.0",
+    "@tailwindcss/postcss": "^4.3.3",
     "bcryptjs": "^3.0.3",
     "date-fns": "^4.4.0",
     "date-fns-tz": "^3.2.0",
     "libphonenumber-js": "^1.13.15",
-    "next": "^15.1.6",
+    "next": "^16.4.3",
     "next-auth": "^5.0.0-beta.32",
     "node-ical": "^0.27.3",
     "prisma": "^5.22.0",
@@ -50,9 +53,9 @@
     "eslint-config-next": "^15.1.6",
     "postcss": "^8.4.49",
     "prettier": "^3.4.2",
-    "tailwindcss": "^3.4.17",
+    "tailwindcss": "^4.3.3",
     "tsx": "^4.23.15",
     "typescript": "^5.7.3",
-    "vitest": "^3.0.5"
+    "vitest": "^4.1.12"
   }
 }

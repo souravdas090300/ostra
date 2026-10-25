@@ -10,6 +10,7 @@ import { parseContact, parseStayDates } from "@/lib/booking-validation";
 import { findOverlaps, type Overlap } from "@/lib/booking-overlaps";
 import { rescheduleBookings } from "@/lib/schedule";
 import { phoneIsOptedOut } from "@/lib/optout";
+import { echo } from "@/lib/validation";
 
 export type BookingFormState =
   | {
@@ -22,9 +23,6 @@ export type BookingFormState =
     }
   | undefined;
 
-const echo = (fd: FormData): Record<string, string> =>
-  Object.fromEntries([...fd.entries()].filter(([, v]) => typeof v === "string")) as Record<string, string>;
-
 const nullify = <T,>(v: T | undefined) => (v === undefined ? null : v);
 
 export async function createBooking(_p: BookingFormState, fd: FormData): Promise<BookingFormState> {
@@ -32,7 +30,7 @@ export async function createBooking(_p: BookingFormState, fd: FormData): Promise
   const submitted = echo(fd);
 
   const apartment = await prisma.apartment.findFirst({
-    where: { id: String(fd.get("apartmentId") ?? ""), ownerId: owner.user.id },
+    where: { id: String(fd.get("apartmentId") ?? ""), ownerId: owner.id },
   });
   if (!apartment) return { fieldErrors: { apartmentId: ["Choose an apartment."] }, submitted };
 
@@ -42,11 +40,11 @@ export async function createBooking(_p: BookingFormState, fd: FormData): Promise
   if (!contact.data || !dates.ok || Object.keys(fieldErrors).length) return { fieldErrors, submitted };
 
   // Check opt-out
-  if (contact.data.guestPhone && (await phoneIsOptedOut(owner.user.id, contact.data.guestPhone))) {
+  if (contact.data.guestPhone && (await phoneIsOptedOut(owner.id, contact.data.guestPhone))) {
     return { fieldErrors: { guestPhone: ["This number has opted out of messages."] }, submitted };
   }
 
-  const overlaps = await findOverlaps(owner.user.id, apartment.id, dates.inYmd, dates.outYmd);
+  const overlaps = await findOverlaps(owner.id, apartment.id, dates.inYmd, dates.outYmd);
   if (overlaps.length && fd.get("confirmOverlap") !== "1") return { overlaps, submitted, landline: contact.landline };
 
   const guestOptIn = fd.get("guestOptIn") === "true";
@@ -65,7 +63,7 @@ export async function createBooking(_p: BookingFormState, fd: FormData): Promise
       guests: nullify(contact.data.guests),
       notes: nullify(contact.data.notes),
       optedInAt: contact.data.guestPhone && guestOptIn ? new Date() : null,
-      optedOutAt: contact.data.guestPhone && (await phoneIsOptedOut(owner.user.id, contact.data.guestPhone)) ? new Date() : null,
+      optedOutAt: contact.data.guestPhone && (await phoneIsOptedOut(owner.id, contact.data.guestPhone)) ? new Date() : null,
     },
   });
   await rescheduleBookings([booking.id]);
@@ -77,7 +75,7 @@ export async function updateBooking(id: string, _p: BookingFormState, fd: FormDa
   const owner = await requireOwner();
   const submitted = echo(fd);
   const b = await prisma.booking.findFirst({
-    where: { id, apartment: { ownerId: owner.user.id } }, // ownership enforced in the query
+    where: { id, apartment: { ownerId: owner.id } }, // ownership enforced in the query
     include: { apartment: true },
   });
   if (!b) notFound();
@@ -89,7 +87,7 @@ export async function updateBooking(id: string, _p: BookingFormState, fd: FormDa
 
   // Check opt-out if trying to opt in
   const guestOptIn = fd.get("guestOptIn") === "true";
-  if (contact.data.guestPhone && guestOptIn && (await phoneIsOptedOut(owner.user.id, contact.data.guestPhone))) {
+  if (contact.data.guestPhone && guestOptIn && (await phoneIsOptedOut(owner.id, contact.data.guestPhone))) {
     return { fieldErrors: { guestPhone: ["This number has opted out of messages."] }, submitted };
   }
 
@@ -121,7 +119,7 @@ export async function updateBooking(id: string, _p: BookingFormState, fd: FormDa
     // Only direct bookings read date fields. Synced bookings ignore them completely.
     const dates = parseStayDates(fd, todayMalta());
     if (!dates.ok) return { fieldErrors: dates.fieldErrors, submitted };
-    const overlaps = await findOverlaps(owner.user.id, b.apartmentId, dates.inYmd, dates.outYmd, b.id);
+    const overlaps = await findOverlaps(owner.id, b.apartmentId, dates.inYmd, dates.outYmd, b.id);
     if (overlaps.length && fd.get("confirmOverlap") !== "1") return { overlaps, submitted, landline: contact.landline };
     const checkIn = maltaLocalToUtc(dates.inYmd, b.apartment.checkInTime);
     const checkOut = maltaLocalToUtc(dates.outYmd, b.apartment.checkOutTime);
@@ -145,7 +143,7 @@ export async function updateBooking(id: string, _p: BookingFormState, fd: FormDa
 
 export async function cancelDirectBooking(id: string): Promise<BookingFormState> {
   const owner = await requireOwner();
-  const b = await prisma.booking.findFirst({ where: { id, apartment: { ownerId: owner.user.id } } });
+  const b = await prisma.booking.findFirst({ where: { id, apartment: { ownerId: owner.id } } });
   if (!b) notFound();
   if (b.source !== "DIRECT") return { error: "Cancel this booking on Airbnb or Booking.com. Ostra will update within the hour." };
   if (b.status === "CANCELLED") return { ok: true };
@@ -157,10 +155,10 @@ export async function cancelDirectBooking(id: string): Promise<BookingFormState>
 
 export async function restoreDirectBooking(id: string, _p: BookingFormState, fd: FormData): Promise<BookingFormState> {
   const owner = await requireOwner();
-  const b = await prisma.booking.findFirst({ where: { id, apartment: { ownerId: owner.user.id } } });
+  const b = await prisma.booking.findFirst({ where: { id, apartment: { ownerId: owner.id } } });
   if (!b) notFound();
   if (b.source !== "DIRECT" || b.status !== "CANCELLED") return { error: "Only cancelled direct bookings can be restored." };
-  const overlaps = await findOverlaps(owner.user.id, b.apartmentId, maltaYmd(b.checkIn), maltaYmd(b.checkOut), b.id);
+  const overlaps = await findOverlaps(owner.id, b.apartmentId, maltaYmd(b.checkIn), maltaYmd(b.checkOut), b.id);
   if (overlaps.length && fd.get("confirmOverlap") !== "1") return { overlaps };
   await prisma.booking.update({ where: { id: b.id }, data: { status: "CONFIRMED" } });
   await rescheduleBookings([b.id]);
@@ -172,7 +170,7 @@ export async function restoreDirectBooking(id: string, _p: BookingFormState, fd:
 export async function setMessagesPaused(id: string, paused: boolean): Promise<void> {
   const owner = await requireOwner();
   const { count } = await prisma.booking.updateMany({
-    where: { id, isBlock: false, apartment: { ownerId: owner.user.id } },
+    where: { id, isBlock: false, apartment: { ownerId: owner.id } },
     data: { messagesPaused: paused },
   });
   if (count === 0) notFound();
@@ -185,7 +183,7 @@ export async function skipScheduledMessage(scheduledMessageId: string): Promise<
   const message = await prisma.scheduledMessage.findFirst({
     where: {
       id: scheduledMessageId,
-      booking: { apartment: { ownerId: owner.user.id } },
+      booking: { apartment: { ownerId: owner.id } },
     },
   });
   if (!message) notFound();

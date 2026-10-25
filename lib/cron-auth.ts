@@ -7,3 +7,10 @@ export function cronAuthorized(req: Request): boolean {
   const b = Buffer.from(`Bearer ${secret}`);
   return a.length === b.length && timingSafeEqual(a, b);
 }
+
+export function requireCronAuth(req: Request): Response | null {
+  if (!cronAuthorized(req)) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+  return null;
+}

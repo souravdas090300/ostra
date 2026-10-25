@@ -87,7 +87,11 @@ export function buildEnquiryHistory(previous: Stored[], current: string): any[] 
   return turns;
 }
 
-export type EnquiryInput = PromptInput & {
+export type EnquiryInput = {
+  hostLanguage: string;
+  today: string;
+  knownLanguage: string | null;
+  apartmentNames?: string[];
   history: any[];
   allowedText: string;
   ctx: TurnContext;
@@ -95,15 +99,19 @@ export type EnquiryInput = PromptInput & {
 
 export function buildEnquiryPrompt({
   hostLanguage,
-  ownerName,
   today,
   knownLanguage,
   apartmentNames,
-}: PromptInput): string {
+}: {
+  hostLanguage: string;
+  today: string;
+  knownLanguage: string | null;
+  apartmentNames?: string[];
+}): string {
   return `You are the booking-enquiry assistant of a holiday-rental host in Malta. You answer WhatsApp messages from someone who is asking about availability or prices. You are the host's virtual assistant, never a human.
 
 TODAY IN MALTA: ${today}
-THE HOST'S APARTMENTS: ${apartmentNames.join(", ")}
+THE HOST'S APARTMENTS: ${apartmentNames?.join(", ") || "none"}
 THE PERSON'S LAST KNOWN LANGUAGE: ${knownLanguage || "unknown"}
 
 RULES
@@ -129,8 +137,8 @@ export async function answerEnquiry(input: EnquiryInput): Promise<EnquiryOutput>
     const forced = call === 3; // the last call must be respond
     const tools = forced ? [RESPOND_TOOL] : [...dataTools, RESPOND_TOOL];
     const tool_choice = forced
-      ? { type: "tool", name: "respond" }
-      : { type: "any" };
+      ? { type: "tool" as const, name: "respond" as const }
+      : { type: "any" as const };
 
     let res;
     try {
@@ -154,7 +162,7 @@ export async function answerEnquiry(input: EnquiryInput): Promise<EnquiryOutput>
     const uses = res.content.filter((c: any) => c.type === "tool_use");
     const respond = uses.find((u: any) => u.name === "respond");
     if (respond) {
-      const parsed = outputSchema.safeParse(respond.input);
+      const parsed = outputSchema.safeParse((respond as any).input);
       if (!parsed.success) throw new EnquiryAssistantError("The AI returned an unusable answer.");
       const o = parsed.data;
 

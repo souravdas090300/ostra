@@ -8,10 +8,10 @@ import MessagesSettings from "@/components/MessagesSettings";
 
 export default async function MessagesSettingsPage() {
   const session = await requireOwner();
-  const ownerId = session.user.id;
+  const ownerId = session.id;
 
   // Ensure default templates exist
-  await ensureDefaultTemplates(ownerId, session.user.hostLanguage);
+  await ensureDefaultTemplates(ownerId, session.hostLanguage);
 
   const owner = await prisma.owner.findUnique({
     where: { id: ownerId },

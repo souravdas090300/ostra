@@ -345,7 +345,9 @@ async function runGetApartmentInfo(
   ctx: TurnContext,
 ): Promise<string> {
   const { apartment_name } = input;
-  const apt = await findApartment(ctx.ownerId, apartment_name);
+  const apt = await prisma.apartment.findFirst({
+    where: { ownerId: ctx.ownerId, name: apartment_name },
+  });
   if (!apt) {
     const apartments = await prisma.apartment.findMany({
       where: { ownerId: ctx.ownerId },
@@ -393,7 +395,7 @@ async function runSaveLeadDetails(
 async function findApartment(ownerId: string, name: string) {
   // Case-insensitive exact match
   const exact = await prisma.apartment.findFirst({
-    where: { ownerId, name: { equals: name, mode: "insensitive" } },
+    where: { ownerId, name },
   });
   if (exact) return exact;
 

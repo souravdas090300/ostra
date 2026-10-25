@@ -5,6 +5,7 @@ import { assertAiBudget, recordUsage } from "./usage";
 import { scrub } from "./scrub";
 import { unsupportedContacts } from "./guards";
 import { normaliseLanguage } from "./languages";
+import { log } from "./log";
 
 const anthropic = new Anthropic({ timeout: 25_000, maxRetries: 1 });
 
@@ -71,7 +72,7 @@ export async function draftReviewReply(params: {
     where: {
       ownerId,
       kind: "AI_REPLY",
-      day: new Date(now.toISOString().slice(0, 10)),
+      createdAt: { gte: hourAgo },
     },
   });
   if (recentCount >= 30) {
@@ -191,7 +192,7 @@ export async function draftReviewReply(params: {
     });
 
     // Log only scrubbed data
-    console.log(`review_draft: owner=${ownerId} risk=${risk} chars=${reply.length}`);
+    log("info", "review_draft", { owner: ownerId, risk, chars: reply.length });
 
     return {
       success: true,
@@ -202,7 +203,7 @@ export async function draftReviewReply(params: {
       riskNote: risk_note,
     };
   } catch (e) {
-    console.log(`review_draft failed: owner=${ownerId} error=${scrub(String(e))}`);
+    log("error", "review_draft failed", { owner: ownerId, error: scrub(String(e)) });
     return { success: false, error: "Failed to generate draft. Please try again." };
   }
 }
