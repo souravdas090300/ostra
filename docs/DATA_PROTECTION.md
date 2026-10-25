@@ -25,6 +25,7 @@
 | Escalation handling | Guest messages, phone | Alert host to issues | Contract performance |
 | Booking management | Guest name, phone, dates | Manage reservations | Contract performance |
 | Messaging | Guest phone, message content | Host-guest communication | Contract performance |
+| Calendar export | Booking dates (no guest personal data) | Share availability with Airbnb/Booking.com to prevent double bookings | Contract performance |
 
 ## Data Subjects
 - Guests: individuals staying at apartments

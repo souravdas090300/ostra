@@ -33,6 +33,7 @@ model Owner {
   optOuts             OptOut[]
   auditLogs           AuditLog[]
   usageDaily          UsageDaily[]
+  leads               Lead[]
 }
 
 model Apartment {
@@ -49,14 +50,16 @@ model Apartment {
   baseNightlyCents Int      @default(0)
   cleaningFeeCents Int      @default(0)
   minNights        Int      @default(1)
-  icalExportToken  String   @unique @default(cuid())
   reviewUrl        String?  // https link where guests leave a review
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  owner            Owner    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  owner            Owner         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   feeds            CalendarFeed[]
   bookings         Booking[]
+  exportFeeds      ExportFeed[]
+  rates             Rate[]
+  leads            Lead[]
 
   @@index([ownerId])
 }
@@ -267,4 +270,84 @@ model UsageDaily {
   createdAt    DateTime  @default(now())
 
   @@unique([ownerId, day, kind])
+}
+
+model ExportFeed {
+  id            String   @id @default(cuid())
+  apartmentId   String
+  apartment     Apartment @relation(fields: [apartmentId], references: [id], onDelete: Cascade)
+  target        String   // AIRBNB or BOOKING_COM (ExportTarget enum in app code)
+  token         String   @unique
+  enabled       Boolean  @default(false)
+  enabledAt     DateTime?
+  confirmedAt   DateTime?
+  lastFetchedAt DateTime?
+  fetchCount    Int      @default(0)
+  createdAt     DateTime @default(now())
+
+  @@unique([apartmentId, target])
+}
+
+model Rate {
+  id           String   @id @default(cuid())
+  apartmentId  String
+  apartment    Apartment @relation(fields: [apartmentId], references: [id], onDelete: Cascade)
+  startDate    DateTime
+  endDate      DateTime
+  nightlyCents Int
+  minNights    Int?
+  createdAt    DateTime @default(now())
+
+  @@index([apartmentId, startDate, endDate])
+}
+
+model Lead {
+  id            String     @id @default(cuid())
+  ownerId       String
+  owner         Owner      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  phone         String
+  name          String?
+  status        String     @default("NEW") // NEW, QUOTED, NEEDS_HOST, BOOKED, LOST
+  checkIn       DateTime?
+  checkOut      DateTime?
+  guests        Int?
+  apartmentId   String?
+  apartment     Apartment? @relation(fields: [apartmentId], references: [id], onDelete: SetNull)
+  quotedCents   Int?
+  language      String?
+  notes         String?
+  bookingId     String?                       // set when converted
+  blockedAt     DateTime?                     // host blocked this number: no reply, nothing stored
+  lastInboundAt DateTime   @default(now())
+  createdAt     DateTime   @default(now())
+  messages      LeadMessage[]
+
+  @@unique([ownerId, phone])
+  @@index([ownerId, status, lastInboundAt])
+}
+
+model LeadMessage {
+  id               String    @id @default(cuid())
+  leadId           String
+  lead             Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  direction        String    // INBOUND, OUTBOUND
+  author           String?   // GUEST, AI, HOST, SYSTEM
+  body             String
+  originalBody     String?   // the host's own-language text when the sent text is a translation
+  language         String?
+  hasMedia         Boolean   @default(false)
+  twilioSid        String?   @unique
+  deliveryStatus   String?
+  errorCode        Int?
+  escalated        Boolean   @default(false)
+  urgent           Boolean   @default(false)
+  escalationReason String?
+  hostSummary      String?
+  resolved         Boolean   @default(false)
+  resolvedAt       DateTime?
+  reminderSentAt   DateTime?
+  createdAt        DateTime  @default(now())
+
+  @@index([leadId, createdAt])
+  @@index([escalated, resolved])
 }

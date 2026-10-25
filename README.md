@@ -53,37 +53,52 @@ npx prisma db push
 - `npm run test` - Run tests
 - `npm run seed` - Seed database with sample data
 
-## Deployment (Vercel + Neon)
+## Deployment (Railway)
 
-This project is configured for deployment on Vercel with Neon PostgreSQL.
+This project is configured for deployment on Railway with PostgreSQL.
 
 ### Steps
 1. Push code to GitHub
-2. Create a Neon PostgreSQL database:
-   - Go to [neon.tech](https://neon.tech) and create a free account
-   - Create a new project and copy the connection string
-3. Deploy to Vercel:
-   - Go to [vercel.com](https://vercel.com) and import your GitHub repository
-   - Configure environment variables in Vercel:
-     - `DATABASE_URL` (from Neon)
-     - `AUTH_SECRET` (generate with `openssl rand -base64 32`)
-     - `NEXTAUTH_URL` (your Vercel app URL)
-     - `ANTHROPIC_API_KEY` (if using AI features)
-     - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM` (if using WhatsApp)
-     - `CRON_SECRET` (generate with `openssl rand -base64 32`)
-     - `APP_URL` (your Vercel app URL)
-     - `TZ=UTC` (required for consistent date handling)
-4. Add a build step in Vercel settings:
-   - Build Command: `npm run build`
-   - Install Command: `npm install`
-   - Post-install Command: `npx prisma generate && npx prisma migrate deploy`
+2. Create a Railway project:
+   - Go to [railway.app](https://railway.app) and create an account
+   - Import your GitHub repository
+3. Add PostgreSQL service:
+   - Click "New Service" → "Database" → "PostgreSQL"
+   - Railway will create and configure the database
+4. Add web service:
+   - Click "New Service" → "GitHub Repo" → select your repository
+   - Configure build and start:
+     - Build Command: `npm run build`
+     - Start Command: `npx prisma migrate deploy && npm run start`
+5. Configure environment variables on the web service:
+   - `DATABASE_URL` (reference the PostgreSQL service using the Railway variable button)
+   - `AUTH_SECRET` (generate with `openssl rand -base64 32`)
+   - `CRON_SECRET` (generate with `openssl rand -base64 32`)
+   - `APP_URL` (the public Railway URL of your web service)
+   - `AUTH_TRUST_HOST=true` (needed behind Railway's proxy)
+   - `TZ=UTC` (required for consistent date handling)
+   - `ANTHROPIC_API_KEY` (if using AI features)
+   - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM` (if using WhatsApp)
+   - Additional variables from `.env.example` as needed
+6. Add cron services:
+   - Create new services from GitHub for each cron job
+   - Set them to run as scripts using the same repository
+   - Configure cron schedules in Railway's UI
+7. Set up health check:
+   - Health check path: `/api/health`
+   - Railway uses this to monitor service health
 
 ### Cron Jobs
-The project uses Vercel Cron Jobs (configured in `vercel.json`):
-- Calendar sync: Every 30 minutes (`*/30 * * * *`)
-- Scheduled messages: Every 10 minutes (`*/10 * * * *`)
+Railway Cron Services:
+- Calendar sync: Every 30 minutes
+- Scheduled messages: Every 10 minutes
+- Template sync: Every hour
+- Retention cleanup: Daily
+- Self-check: Every 5 minutes
 
 ### Note
 - Local development uses SQLite for simplicity
-- Production uses PostgreSQL on Neon
-- The schema supports both databases
+- Production uses PostgreSQL on Railway
+- Neon can still be used for development/test branches
+- Deploy from the `main` branch
+- For rollback: redeploy a previous deployment from Railway's deployments tab

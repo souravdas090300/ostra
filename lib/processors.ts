@@ -42,4 +42,16 @@ export const PROCESSORS: Processor[] = [
     dataInvolved: "Host email, escalation summaries (no guest personal data)",
     region: "US",
   },
+  {
+    name: "Airbnb",
+    purpose: "Calendar import to prevent double bookings",
+    dataInvolved: "Booking dates only (no guest names, phone numbers, or messages)",
+    region: "Global",
+  },
+  {
+    name: "Booking.com",
+    purpose: "Calendar import to prevent double bookings",
+    dataInvolved: "Booking dates only (no guest names, phone numbers, or messages)",
+    region: "Global",
+  },
 ];

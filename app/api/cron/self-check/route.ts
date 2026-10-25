@@ -3,6 +3,7 @@ import { reportError } from "@/lib/report-error";
 import { withJobRun } from "@/lib/job-run";
 import { notifyHost } from "@/lib/notify";
 import { revalidatePath } from "next/cache";
+import { linkState } from "@/lib/export-feeds";
 
 const OPERATOR_EMAIL = process.env.OPERATOR_EMAIL;
 
@@ -77,6 +78,53 @@ export async function POST(req: Request) {
     });
     if (feedsWithErrors > 0) {
       alerts.push(`${feedsWithErrors} feeds with errors or no success for 3 hours`);
+    }
+
+    // Check export feeds for stale or waiting links
+    const exportFeeds = await prisma.exportFeed.findMany({
+      where: { enabled: true },
+      include: { apartment: true },
+    });
+    const staleHours = Number(process.env.EXPORT_STALE_AFTER_HOURS ?? 48);
+    for (const feed of exportFeeds) {
+      const state = linkState(feed, now, staleHours);
+      if (state === "STALE") {
+        alerts.push(`Export feed ${feed.target} for apartment ${feed.apartment.name} (${feed.apartmentId}) is stale (not read for ${staleHours}+ hours)`);
+      } else if (state === "WAITING" && feed.enabledAt && now.getTime() - feed.enabledAt.getTime() > 48 * 60 * 60_000) {
+        alerts.push(`Export feed ${feed.target} for apartment ${feed.apartment.name} (${feed.apartmentId}) has been waiting for platform to read it for over 48 hours`);
+      }
+    }
+
+    // Check for possible mirror loops (platform re-exporting imports)
+    for (const feed of exportFeeds) {
+      if (!feed.enabledAt) continue;
+      // Find confirmed bookings from this target platform created after enabledAt
+      const platformBookings = await prisma.booking.findMany({
+        where: {
+          apartmentId: feed.apartmentId,
+          source: feed.target,
+          status: "CONFIRMED",
+          createdAt: { gt: feed.enabledAt },
+        },
+        select: { id: true, checkIn: true, checkOut: true },
+      });
+      // Check if any of these have identical dates to a booking from another source
+      for (const pb of platformBookings) {
+        const matchingOther = await prisma.booking.count({
+          where: {
+            apartmentId: feed.apartmentId,
+            id: { not: pb.id },
+            source: { not: feed.target },
+            status: "CONFIRMED",
+            checkIn: pb.checkIn,
+            checkOut: pb.checkOut,
+          },
+        });
+        if (matchingOther > 0) {
+          alerts.push(`Possible mirror from ${feed.target} for apartment ${feed.apartment.name} (${feed.apartmentId}); check docs/EXPORT_TEST.md; consider turning the link off`);
+          break; // One alert per feed is enough
+        }
+      }
     }
 
     // Check if this is a new alert state (transition from OK to degraded)

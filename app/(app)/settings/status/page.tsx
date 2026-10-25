@@ -2,6 +2,7 @@ import { requireOwner } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { assistantEnabled, automaticMessagesEnabled } from "@/lib/flags";
 import { loadWrongAnswers } from "@/lib/inbox-data";
+import { linkState } from "@/lib/export-feeds";
 
 export default async function StatusPage() {
   const session = await requireOwner();
@@ -31,6 +32,14 @@ export default async function StatusPage() {
       lastError: true,
     },
   });
+
+  // Get export feeds
+  const exportFeeds = await prisma.exportFeed.findMany({
+    where: { apartment: { ownerId: session.user.id } },
+    include: { apartment: { select: { name: true } } },
+  });
+  const now = new Date();
+  const staleHours = Number(process.env.EXPORT_STALE_AFTER_HOURS ?? 48);
 
   // Get failed/skipped messages in last 7 days
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60_000);
@@ -155,6 +164,32 @@ export default async function StatusPage() {
                 <div className="flex items-center gap-2">
                   {hasError && <span className="text-red-600">Error</span>}
                   {lastSuccessAge !== null && <span className="text-gray-600">{lastSuccessAge}h ago</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Export feeds */}
+      <div className="rounded-lg border bg-white p-4">
+        <h2 className="font-medium">Export feeds</h2>
+        <div className="mt-3 space-y-2">
+          {exportFeeds.map((feed) => {
+            const state = linkState(feed, now, staleHours);
+            const platformName = feed.target === "AIRBNB" ? "Airbnb" : "Booking.com";
+            const lastReadAge = feed.lastFetchedAt
+              ? Math.floor((Date.now() - feed.lastFetchedAt.getTime()) / 60 / 60_000)
+              : null;
+            return (
+              <div key={feed.id} className="flex items-center justify-between text-sm">
+                <span>{feed.apartment.name} ({platformName})</span>
+                <div className="flex items-center gap-2">
+                  <span className={state === "CONNECTED" ? "text-green-600" : state === "DISABLED" ? "text-gray-600" : "text-amber-600"}>
+                    {state}
+                  </span>
+                  {lastReadAge !== null && <span className="text-gray-600">{lastReadAge}h ago</span>}
+                  <span className="text-gray-500">{feed.fetchCount} reads</span>
                 </div>
               </div>
             );

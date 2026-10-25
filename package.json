@@ -3,22 +3,18 @@
   "version": "1.0.0",
   "description": "See OSTRA_PLAN.md for the build plan.",
   "type": "module",
+  "engines": { "node": ">=20" },
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "cross-env TZ=UTC next dev",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "test:ui": "vitest --ui",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "seed": "tsx prisma/seed.ts",
-    "postinstall": "prisma generate",
-    "env:dev": "cp .env.dev .env && node scripts/switch-env.js dev",
-    "env:prod": "cp .env.prod .env && node scripts/switch-env.js prod",
-    "db:push": "npx prisma db push",
-    "db:migrate": "npx prisma migrate dev"
+    "test": "cross-env TZ=UTC vitest run",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:seed": "tsx prisma/seed.ts",
+    "format": "prettier --write ."
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -49,6 +45,7 @@
     "@types/react": "^19.0.6",
     "@types/react-dom": "^19.0.2",
     "autoprefixer": "^10.4.20",
+    "cross-env": "^10.1.0",
     "eslint": "^9.17.0",
     "eslint-config-next": "^15.1.6",
     "postcss": "^8.4.49",

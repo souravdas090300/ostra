@@ -73,6 +73,7 @@ export default async function CalendarPage({
         doubles={findDoubleBookings(data.upcomingStays)}
         missing={findMissingContacts(data.upcomingStays, today)}
         feedIssues={feedIssues(data.feeds, now)}
+        exportFeedIssues={data.exportFeedIssues}
         messageIssues={data.messageIssues}
         deliveryIssues={data.deliveryIssues}
         skippedForNoTemplate={data.skippedForNoTemplate}

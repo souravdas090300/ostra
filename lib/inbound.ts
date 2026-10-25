@@ -11,6 +11,7 @@ import { WhatsAppError, sendWhatsApp } from "./whatsapp";
 import { log } from "./log";
 import { assistantEnabled } from "./flags";
 import { assertAiBudget, recordUsage, checkAndSendBudgetWarning, BudgetExceededError } from "./usage";
+import { handleEnquiry } from "./enquiry";
 
 export type InboundInput = { sid: string; from: string; to: string; body: string; numMedia: number };
 
@@ -32,8 +33,6 @@ const STOP_CONFIRM: Record<string, string> = {
   fr: "Vous ne recevrez plus de messages de notre part.",
   es: "Ya no recibirá mensajes nuestros.",
 };
-const UNMATCHED_REPLY =
-  "Thanks for your message. We could not find a booking linked to this number. If you have booked with us, please tell us the name on the booking and your host will get back to you.";
 
 const isUnique = (e: unknown) => e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -47,6 +46,7 @@ export async function processInbound(i: InboundInput, now = new Date()): Promise
 
   // Idempotent: Twilio can deliver the same message more than once.
   if (await prisma.message.findUnique({ where: { twilioSid: i.sid } })) return;
+  if (await prisma.leadMessage.findUnique({ where: { twilioSid: i.sid } })) return;
   if (await prisma.unmatchedMessage.findUnique({ where: { twilioSid: i.sid } })) return;
 
   const body = i.body.trim().slice(0, 2000);
@@ -54,7 +54,7 @@ export async function processInbound(i: InboundInput, now = new Date()): Promise
   if (!body && !hasMedia) return;
 
   const match = await matchBooking(owner.id, from, now);
-  if (!match) return handleUnmatched(owner.id, from, i.sid, body, hasMedia, now);
+  if (!match) return handleEnquiry({ sid: i.sid, from, to, body, numMedia: i.numMedia }, now);
   const { booking } = match;
   const apartment = booking.apartment;
 

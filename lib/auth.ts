@@ -1,25 +1,25 @@
 import NextAuth from "next-auth";
 import { authConfig } from "../auth.config";
 import { redirect } from "next/navigation";
+import { prisma } from "./db";
+import "./env";
 
 const { handlers, signIn, signOut, auth } = NextAuth(authConfig);
 
 export { handlers, signIn, signOut, auth };
 
-export type AuthSession = {
-  user: {
-    id: string;
-    email: string;
-    hostLanguage: string;
-    defaultGuestLanguage: string;
-    iat?: number;
-  };
-};
+export type SessionOwner = Omit<
+  NonNullable<Awaited<ReturnType<typeof prisma.owner.findUnique>>>,
+  "passwordHash"
+>;
 
-export async function requireOwner(): Promise<AuthSession> {
+/** The logged-in owner, or a redirect to /login. Use in every page, server action and route that needs a session. */
+export async function requireOwner(): Promise<SessionOwner> {
   const session = await auth();
-  if (!session?.user) {
-    redirect("/login");
-  }
-  return session as AuthSession;
+  const id = session?.user?.id;
+  if (!id) redirect("/login");
+  const owner = await prisma.owner.findUnique({ where: { id } });
+  if (!owner) redirect("/login");
+  const { passwordHash: _omit, ...safe } = owner;
+  return safe;
 }

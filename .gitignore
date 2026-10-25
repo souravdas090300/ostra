@@ -17,8 +17,9 @@ dist/
 .env.prod
 !.env.example
 
-# Vercel
+# Vercel (removed - using Railway)
 .vercel
+vercel.json
 
 # Database files - NEVER commit these
 *.db
