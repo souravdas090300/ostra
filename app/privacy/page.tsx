@@ -27,6 +27,9 @@ export default function PrivacyPage() {
           <li>WhatsApp messages between guests and hosts</li>
           <li>Guest language preferences</li>
         </ul>
+        <p className="mt-3 text-sm text-gray-700">
+          Booking dates (but not guest names or contact details) are shared with Airbnb and Booking.com through calendar export links to prevent double bookings. These links contain only which nights are reserved, never who the guest is. The links can be revoked at any time.
+        </p>
       </section>
 
       <section className="space-y-4">

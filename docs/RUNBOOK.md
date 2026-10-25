@@ -71,6 +71,17 @@ If a deployment causes issues:
 2. Update `AUTH_SECRET` in environment variables
 3. Note: This will invalidate all existing sessions; users will need to log in again
 
+### Export Token Rotation
+If an export link is leaked or compromised:
+
+1. In the apartment page, click "Make a new link" for the affected platform
+2. The old link will stop working immediately (returns 404)
+3. Copy the new link and update it in the platform (Airbnb/Booking.com calendar settings)
+4. The platform may take a few hours to read the new link
+5. Monitor the status page to confirm the platform is reading the new link
+
+**Note**: Regenerating a link resets the fetch count and confirmation state. The host must re-confirm that they added the link in the platform.
+
 ## Troubleshooting
 
 ### WhatsApp Messages Not Sending
@@ -178,6 +189,21 @@ To enable email notifications for escalations:
 4. Check retention/cron job runs in /settings/status
 5. Run sync manually from apartment page
 
+### Export Link Issues
+**Symptoms**: Platform not blocking dates, export link stale, suspected feedback loop
+
+**Steps**:
+1. Check export link status in apartment page (Off, Waiting, Connected, Stale)
+2. Verify the platform has imported the link correctly
+3. Check if the platform has read the link recently (last read time)
+4. If stale (>48 hours since last read), check platform calendar import settings
+5. If suspected feedback loop (see docs/EXPORT_TEST.md):
+   - Turn off the export link immediately
+   - Ask the host to remove the import on the platform
+   - Cancel any mirror bookings the platform created by removing the imported events through the next sync
+   - Check the calendar by hand
+   - Do not re-enable until the loop test passes again
+
 ### Database Connection Issues
 **Symptoms**: 500 errors, timeouts, connection refused
 
@@ -247,6 +273,7 @@ To enable email notifications for escalations:
 - [ ] Check budget warnings and adjust if needed
 - [ ] Review escalation patterns (add missing info to apartments)
 - [ ] Verify calendar feeds are syncing correctly
+- [ ] Check export link status (stale links, waiting too long)
 - [ ] Check for failed scheduled messages
 - [ ] Review and update message templates
 - [ ] Check Sentry for recurring errors
@@ -270,6 +297,8 @@ To enable email notifications for escalations:
 - [ ] Fill in apartment info (Wi-Fi, key/lockbox, house rules, etc.)
 - [ ] Add iCal feeds from booking platforms
 - [ ] Test calendar sync
+- [ ] Run the loop test for calendar export (see docs/EXPORT_TEST.md)
+- [ ] Enable export links for each platform after loop test passes
 - [ ] Configure WhatsApp (sandbox first, then production)
 - [ ] Set up message templates (get approved for production)
 - [ ] Add phone numbers to upcoming bookings

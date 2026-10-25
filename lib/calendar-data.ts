@@ -2,6 +2,7 @@ import { prisma } from "./db";
 import { maltaLocalToUtc, maltaYmd } from "./time";
 import { addDays } from "./dates";
 import type { Stay } from "./conflicts";
+import { linkState } from "./export-feeds";
 
 const select = {
   id: true,
@@ -199,7 +200,9 @@ export async function loadCalendarData(
   today: string
 ) {
   const to = addDays(from, days);
-  const [apartments, viewStays, upcomingStays, feeds, messageIssues, deliveryIssues, skippedForNoTemplate, escalatedMessages, unmatchedCount] =
+  const now = new Date();
+  const staleHours = Number(process.env.EXPORT_STALE_AFTER_HOURS ?? 48);
+  const [apartments, viewStays, upcomingStays, feeds, exportFeeds, messageIssues, deliveryIssues, skippedForNoTemplate, escalatedMessages, unmatchedCount] =
     await Promise.all([
       prisma.apartment.findMany({
         where: { ownerId },
@@ -220,12 +223,31 @@ export async function loadCalendarData(
           apartment: { select: { name: true } },
         },
       }),
+      prisma.exportFeed.findMany({
+        where: { apartment: { ownerId } },
+        include: { apartment: { select: { name: true } } },
+      }),
       loadMessageIssues(ownerId),
       loadDeliveryIssues(ownerId),
       loadSkippedForNoTemplate(ownerId),
       loadEscalatedMessages(ownerId),
       loadUnmatchedCount(ownerId),
     ]);
+
+  // Process export feeds to find stale/waiting ones
+  const exportFeedIssues = exportFeeds
+    .filter((feed) => {
+      const state = linkState(feed, now, staleHours);
+      return state === "STALE" || (state === "WAITING" && feed.enabledAt && now.getTime() - feed.enabledAt.getTime() > 24 * 60 * 60_000);
+    })
+    .map((feed) => ({
+      apartmentId: feed.apartmentId,
+      apartmentName: feed.apartment.name,
+      target: feed.target,
+      state: linkState(feed, now, staleHours),
+      lastFetchedAt: feed.lastFetchedAt,
+    }));
+
   return {
     apartments,
     viewStays,
@@ -239,6 +261,7 @@ export async function loadCalendarData(
       lastSuccessAt: f.lastSuccessAt,
       lastError: f.lastError,
     })),
+    exportFeedIssues,
     messageIssues,
     deliveryIssues,
     skippedForNoTemplate,

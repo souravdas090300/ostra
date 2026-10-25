@@ -22,6 +22,12 @@ This document lists all secrets used in Ostra, where they are used, and how to r
 | `AWS_ACCESS_KEY_ID` | Backup storage | S3/R2 access | Generate new key in Cloudflare/Backblaze console, update Railway variables, redeploy |
 | `AWS_SECRET_ACCESS_KEY` | Backup storage | S3/R2 authentication | Generate new key in Cloudflare/Backblaze console, update Railway variables, redeploy |
 
+### Application-Generated Secrets
+
+| Secret | Stored In | Purpose | Properties | Rotation Procedure |
+|--------|-----------|---------|------------|-------------------|
+| Export tokens | Database (ExportFeed.token) | Calendar export link authentication | 192 bits (32 chars base64url), unique per apartment/platform, revocable | Regenerate from apartment page (old token stops working immediately) |
+
 ### Rotation Notes
 
 - **DATA_PEPPER**: Rotating this will change all phone/email hashes. Existing opt-outs will need to be re-created. Plan this carefully.

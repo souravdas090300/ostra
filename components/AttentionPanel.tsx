@@ -34,11 +34,20 @@ type EscalatedMessage = {
   createdAt: Date;
 };
 
+type ExportFeedIssue = {
+  apartmentId: string;
+  apartmentName: string;
+  target: string;
+  state: string;
+  lastFetchedAt: Date | null;
+};
+
 export function AttentionPanel({
   apartmentNames,
   doubles,
   missing,
   feedIssues,
+  exportFeedIssues,
   messageIssues,
   deliveryIssues,
   skippedForNoTemplate,
@@ -50,6 +59,7 @@ export function AttentionPanel({
   doubles: DoubleBooking[];
   missing: Stay[];
   feedIssues: FeedIssue[];
+  exportFeedIssues: ExportFeedIssue[];
   messageIssues: MessageIssue[];
   deliveryIssues: DeliveryIssue[];
   skippedForNoTemplate: SkippedForNoTemplate[];
@@ -63,6 +73,7 @@ export function AttentionPanel({
     doubles.length === 0 &&
     missing.length === 0 &&
     feedIssues.length === 0 &&
+    exportFeedIssues.length === 0 &&
     messageIssues.length === 0 &&
     deliveryIssues.length === 0 &&
     skippedForNoTemplate.length === 0 &&
@@ -149,6 +160,33 @@ export function AttentionPanel({
               {feedIssues.length > 5 && (
                 <li className="text-sm text-gray-500">
                   and {feedIssues.length - 5} more
+                </li>
+              )}
+            </ul>
+          </div>
+        )}
+
+        {/* Export feed issues */}
+        {exportFeedIssues.length > 0 && (
+          <div>
+            <h3 className="text-sm font-medium text-amber-800">Export feed problems</h3>
+            <ul className="mt-2 space-y-1">
+              {exportFeedIssues.slice(0, 5).map((f) => (
+                <li key={`${f.apartmentId}-${f.target}`} className="text-sm">
+                  <Link
+                    href={`/apartments/${f.apartmentId}`}
+                    className="text-amber-700 underline"
+                  >
+                    {f.target === "AIRBNB" ? "Airbnb" : "Booking.com"} export for {f.apartmentName}:{" "}
+                    {f.state === "STALE"
+                      ? `has not read the calendar link for ${f.lastFetchedAt ? timeAgo(f.lastFetchedAt, nowDate) : "a while"}`
+                      : "has been waiting for platform to read it for over 24 hours"}
+                  </Link>
+                </li>
+              ))}
+              {exportFeedIssues.length > 5 && (
+                <li className="text-sm text-gray-500">
+                  and {exportFeedIssues.length - 5} more
                 </li>
               )}
             </ul>

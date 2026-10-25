@@ -12,6 +12,7 @@ import { PlatformBlockNotice } from "@/components/PlatformBlockNotice";
 import { BookingActions } from "@/components/BookingActions";
 import { PrivacyActions } from "@/components/PrivacyActions";
 import { updateBooking, setMessagesPaused, skipScheduledMessage } from "../actions";
+import { linkState, type LinkState } from "@/lib/export-feeds";
 
 export default async function BookingDetailPage({
   params,
@@ -27,7 +28,11 @@ export default async function BookingDetailPage({
   const booking = await prisma.booking.findFirst({
     where: { id, apartment: { ownerId: owner.user.id } },
     include: {
-      apartment: true,
+      apartment: {
+        include: {
+          exportFeeds: true,
+        },
+      },
       scheduled: true,
       messages: true,
     },
@@ -40,6 +45,7 @@ export default async function BookingDetailPage({
   const nights = diffDays(inYmd, outYmd);
   const today = todayMalta();
   const isFuture = inYmd >= today;
+  const now = new Date();
 
   // Check for overlaps
   const overlaps = await findOverlaps(owner.user.id, booking.apartmentId, inYmd, outYmd, booking.id);
@@ -49,6 +55,25 @@ export default async function BookingDetailPage({
   const guestCountExceeds = booking.guests && booking.guests > booking.apartment.maxGuests;
 
   const created = sp.created === "1" && booking.source === "DIRECT";
+
+  // Build export feed states
+  const exportStates: Record<"AIRBNB" | "BOOKING_COM", LinkState> = {
+    AIRBNB: "DISABLED",
+    BOOKING_COM: "DISABLED",
+  };
+  const lastFetched: Record<"AIRBNB" | "BOOKING_COM", Date | null> = {
+    AIRBNB: null,
+    BOOKING_COM: null,
+  };
+  for (const feed of booking.apartment.exportFeeds) {
+    if (feed.target === "AIRBNB") {
+      exportStates.AIRBNB = linkState(feed, now);
+      lastFetched.AIRBNB = feed.lastFetchedAt;
+    } else if (feed.target === "BOOKING_COM") {
+      exportStates.BOOKING_COM = linkState(feed, now);
+      lastFetched.BOOKING_COM = feed.lastFetchedAt;
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -122,8 +147,16 @@ export default async function BookingDetailPage({
                 Add a WhatsApp number to switch on automatic messages.
               </div>
             )}
-            {booking.source === "DIRECT" && !booking.isBlock && booking.status === "CONFIRMED" && isFuture && (
-              <PlatformBlockNotice apartmentName={booking.apartment.name} inYmd={inYmd} outYmd={outYmd} />
+            {!booking.isBlock && booking.status === "CONFIRMED" && isFuture && (
+              <PlatformBlockNotice
+                apartmentName={booking.apartment.name}
+                inYmd={inYmd}
+                outYmd={outYmd}
+                source={booking.source as "DIRECT" | "AIRBNB" | "BOOKING_COM"}
+                states={exportStates}
+                lastFetched={lastFetched}
+                now={now}
+              />
             )}
           </div>
 

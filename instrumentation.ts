@@ -11,6 +11,11 @@ Sentry.init({
     delete event.request?.headers;
     delete event.user;
 
+    // Redact iCal export URLs (tokens are secrets)
+    if (event.request?.url && event.request.url.startsWith("/api/ical/")) {
+      event.request.url = "/api/ical/[redacted]";
+    }
+
     // Scrub exception values
     if (event.exception?.values) {
       for (const exception of event.exception.values) {
@@ -56,9 +61,12 @@ Sentry.init({
 });
 
 function scrubValue(value: string): string {
-  // Remove phone numbers, emails, URLs, long digit runs
-  return value
+  // Remove phone numbers, emails, URLs, long digit runs, and iCal export tokens
+  let scrubbed = value
     .replace(/https?:\/\/\S+/gi, "[url]")
     .replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, "[email]")
     .replace(/\+?\d[\d\s().-]{6,}\d/g, "[number]");
+  // Scrub iCal export tokens (base64url, 20-64 chars) when they appear in URLs
+  scrubbed = scrubbed.replace(/\/api\/ical\/[A-Za-z0-9_-]{20,64}(?:\.ics)?/g, "/api/ical/[redacted]");
+  return scrubbed;
 }

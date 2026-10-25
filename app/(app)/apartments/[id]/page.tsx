@@ -3,17 +3,26 @@ import { prisma } from "@/lib/db";
 import { requireOwner } from "@/lib/auth";
 import { ApartmentForm } from "@/components/ApartmentForm";
 import { FeedManager } from "@/components/FeedManager";
+import { ExportPanel } from "@/components/ExportPanel";
+import { RateManager } from "@/components/RateManager";
+import { TryDates } from "@/components/TryDates";
 import { DeleteButton } from "@/components/DeleteButton";
 import { updateApartment, deleteApartment } from "../actions";
+import { ensureExportFeeds } from "../export-actions";
 
 export default async function ApartmentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await requireOwner();
   const a = await prisma.apartment.findFirst({
     where: { id, ownerId: session.user.id },
-    include: { feeds: true },
-  });
+    include: { feeds: true, exportFeeds: true, rates: true },
+  }) as any;
   if (!a) notFound();
+
+  // Ensure export feeds exist for this apartment
+  await ensureExportFeeds(a.id);
+
+  const appUrl = process.env.APP_URL || "http://localhost:3000";
 
   return (
     <div className="space-y-8">
@@ -28,9 +37,34 @@ export default async function ApartmentPage({ params }: { params: Promise<{ id: 
           info: a.info, publicInfo: a.publicInfo, reviewUrl: a.reviewUrl ?? "",
         }}
       />
-      <FeedManager apartmentId={a.id} feeds={a.feeds.map((f) => ({
+      <RateManager
+        apartmentId={a.id}
+        rates={a.rates.map((r: any) => ({
+          id: r.id,
+          startDate: r.startDate.toISOString(),
+          endDate: r.endDate.toISOString(),
+          nightlyCents: r.nightlyCents,
+          minNights: r.minNights,
+        }))}
+      />
+      <TryDates apartmentId={a.id} />
+      <FeedManager apartmentId={a.id} feeds={a.feeds.map((f: any) => ({
         id: f.id, source: f.source, icalUrl: f.icalUrl, lastSyncAt: f.lastSyncAt?.toISOString() ?? null, lastSuccessAt: f.lastSuccessAt?.toISOString() ?? null, lastError: f.lastError,
       }))} />
+      <ExportPanel
+        apartmentId={a.id}
+        feeds={a.exportFeeds.map((f: any) => ({
+          id: f.id,
+          target: f.target,
+          token: f.token,
+          enabled: f.enabled,
+          enabledAt: f.enabledAt,
+          confirmedAt: f.confirmedAt,
+          lastFetchedAt: f.lastFetchedAt,
+          fetchCount: f.fetchCount,
+        }))}
+        appUrl={appUrl}
+      />
       <form action={deleteApartment.bind(null, a.id)}>
         <DeleteButton label="Delete this apartment and all its bookings" />
       </form>

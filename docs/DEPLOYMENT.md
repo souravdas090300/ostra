@@ -1,53 +1,23 @@
-# Ostra Deployment Guide (Vercel + Neon)
+# Ostra Deployment Guide
 
-## Prerequisites
-- GitHub repository with the Ostra code
-- Vercel account
-- Neon PostgreSQL account
+**DEPRECATED**: This document is for Vercel + Neon deployment, which is no longer the recommended approach.
 
-## Database Setup (Neon)
+**Current deployment target**: Railway
 
-1. Go to [neon.tech](https://neon.tech) and sign up
-2. Create a new project
-3. Copy the connection string (it will look like `postgresql://user:password@ep-xxx.aws.neon.tech/neondb?sslmode=require`)
-4. Keep this for the Vercel configuration
+Please use **[DEPLOY.md](./DEPLOY.md)** for Railway deployment instructions.
 
-## Vercel Deployment
+## Why the Change?
 
-### 1. Import to Vercel
-1. Go to [vercel.com](https://vercel.com)
-2. Click "Add New Project"
-3. Import your GitHub repository
-4. Configure the project:
-   - **Framework Preset**: Next.js
-   - **Root Directory**: `./` (leave as is)
-   - **Build Command**: `npm run build`
-   - **Output Directory**: `.next`
-   - **Install Command**: `npm install`
+Railway was chosen over Vercel + Neon because:
+- **Lower cost**: $10-20/month vs $30-45/month for one host
+- **Simpler architecture**: One platform for web app, database, and cron jobs
+- **Normal PostgreSQL**: Always-on database as the code assumes
+- **Built-in cron**: Simpler cron job management
+- **Automatic backups**: Included in Railway's PostgreSQL service
 
-### 2. Environment Variables
-Add the following environment variables in Vercel:
+## Vercel + Neon Documentation (Archived)
 
-| Variable | Value | Description |
-|----------|-------|-------------|
-| `DATABASE_URL` | Your Neon connection string | PostgreSQL connection |
-| `AUTH_SECRET` | Generate with `openssl rand -base64 32` | NextAuth secret |
-| `NEXTAUTH_URL` | Your Vercel app URL (e.g., `https://ostra.vercel.app`) | Auth callback URL |
-| `CRON_SECRET` | Generate with `openssl rand -base64 32` | Cron authentication |
-| `APP_URL` | Your Vercel app URL | App base URL |
-| `TZ` | `UTC` | Timezone for date handling |
-| `ANTHROPIC_API_KEY` | (optional) Your Anthropic API key | AI features |
-| `TWILIO_ACCOUNT_SID` | (optional) Your Twilio SID | WhatsApp |
-| `TWILIO_AUTH_TOKEN` | (optional) Your Twilio token | WhatsApp |
-| `TWILIO_WHATSAPP_FROM` | (optional) Your Twilio WhatsApp number | WhatsApp |
-
-### 3. Build Settings
-In Vercel project settings:
-- **Build Command**: `npm run build`
-- **Install Command**: `npm install`
-- **Post-install Command**: `npx prisma generate && npx prisma migrate deploy`
-
-### 4. Deploy
+If you still need to deploy on Vercel + Neon for any reason, the following sections are preserved for reference.
 Click "Deploy". Vercel will:
 1. Install dependencies
 2. Generate Prisma client
