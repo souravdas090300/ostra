@@ -6,21 +6,9 @@ import { requireOwner } from "@/lib/auth";
 import { WhatsAppError, sendWhatsApp } from "@/lib/whatsapp";
 import { assertAiBudget, recordUsage } from "@/lib/usage";
 import { normaliseLanguage } from "@/lib/languages";
-import Anthropic from "@anthropic-ai/sdk";
-
-const anthropic = new Anthropic({ timeout: 25_000, maxRetries: 1 });
-
-export type PreviewState = {
-  translation: string;
-  backTranslation: string;
-  warnings: string[];
-  error?: string;
-};
-
-export type SimpleState = {
-  error?: string;
-  ok?: boolean;
-};
+import { translateText, missingTokens, ReplyTranslationError } from "@/lib/translate-reply";
+import { rateLimit } from "@/lib/rate-limit";
+import { validateDateRange, MAX_TEXT, SimpleState, PreviewState, saveOriginalBody } from "@/lib/validation";
 
 export async function previewLeadReply(
   leadId: string,
@@ -28,53 +16,30 @@ export async function previewLeadReply(
 ): Promise<PreviewState> {
   const session = await requireOwner();
   const lead = await prisma.lead.findFirst({
-    where: { id: leadId, ownerId: session.user.id },
+    where: { id: leadId, ownerId: session.id },
     select: { language: true },
   });
   if (!lead) return { translation: "", backTranslation: "", warnings: ["Lead not found"], error: "Lead not found" };
 
-  const guestLanguage = lead.language ?? session.user.defaultGuestLanguage;
-  const hostLanguage = session.user.hostLanguage;
+  const guestLanguage = lead.language ?? session.defaultGuestLanguage;
+  const hostLanguage = session.hostLanguage;
 
   if (guestLanguage === hostLanguage) {
     return { translation: text, backTranslation: text, warnings: [] };
   }
 
+  if (!rateLimit(`translate:${session.id}`, 60, 3_600_000)) {
+    return { translation: text, backTranslation: text, warnings: ["Too many translations this hour. Try again later."], error: "Too many translations this hour. Try again later." };
+  }
+
   try {
-    const msg = await anthropic.messages.create({
-      model: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5-5",
-      max_tokens: 400,
-      system: `You are a translator. Translate the following message from ${hostLanguage} to ${guestLanguage}. Return only the translation, nothing else.`,
-      messages: [{ role: "user", content: text }],
-    });
-    const translation = msg.content[0]?.type === "text" ? msg.content[0].text : text;
-
-    // Back-translate to check
-    const backMsg = await anthropic.messages.create({
-      model: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5-5",
-      max_tokens: 400,
-      system: `You are a translator. Translate the following message from ${guestLanguage} to ${hostLanguage}. Return only the translation, nothing else.`,
-      messages: [{ role: "user", content: translation }],
-    });
-    const backTranslation = backMsg.content[0]?.type === "text" ? backMsg.content[0].text : translation;
-
-    const warnings: string[] = [];
-    if (backTranslation.toLowerCase() !== text.toLowerCase()) {
-      warnings.push("The back-translation differs from your original. Please review carefully.");
-    }
-
-    await recordUsage(session.user.id, "AI_TRANSLATE", {
-      input: msg.usage.input_tokens,
-      output: msg.usage.output_tokens,
-    });
-    await recordUsage(session.user.id, "AI_TRANSLATE", {
-      input: backMsg.usage.input_tokens,
-      output: backMsg.usage.output_tokens,
-    });
-
+    const translation = await translateText(text, hostLanguage, guestLanguage);
+    const backTranslation = await translateText(translation, guestLanguage, hostLanguage);
+    const missing = missingTokens(text, translation);
+    const warnings = missing.length ? [`These were changed or missing in the translation, check them: ${missing.join(", ")}`] : [];
     return { translation, backTranslation, warnings };
-  } catch {
-    return { translation: text, backTranslation: text, warnings: ["Translation failed - sending original text"] };
+  } catch (e) {
+    return { translation: text, backTranslation: text, warnings: ["Translation failed - sending original text"], error: e instanceof ReplyTranslationError ? e.message : "Could not translate right now." };
   }
 }
 
@@ -85,40 +50,29 @@ export async function recheckLeadTranslation(
 ): Promise<PreviewState> {
   const session = await requireOwner();
   const lead = await prisma.lead.findFirst({
-    where: { id: leadId, ownerId: session.user.id },
+    where: { id: leadId, ownerId: session.id },
     select: { language: true },
   });
   if (!lead) return { translation, backTranslation: "", warnings: ["Lead not found"], error: "Lead not found" };
 
-  const guestLanguage = lead.language ?? session.user.defaultGuestLanguage;
-  const hostLanguage = session.user.hostLanguage;
+  const guestLanguage = lead.language ?? session.defaultGuestLanguage;
+  const hostLanguage = session.hostLanguage;
 
   if (guestLanguage === hostLanguage) {
     return { translation, backTranslation: translation, warnings: [] };
   }
 
+  if (!rateLimit(`translate:${session.id}`, 60, 3_600_000)) {
+    return { translation, backTranslation: original, warnings: ["Too many translations this hour. Try again later."], error: "Too many translations this hour. Try again later." };
+  }
+
   try {
-    const backMsg = await anthropic.messages.create({
-      model: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5-5",
-      max_tokens: 400,
-      system: `You are a translator. Translate the following message from ${guestLanguage} to ${hostLanguage}. Return only the translation, nothing else.`,
-      messages: [{ role: "user", content: translation }],
-    });
-    const backTranslation = backMsg.content[0]?.type === "text" ? backMsg.content[0].text : translation;
-
-    const warnings: string[] = [];
-    if (backTranslation.toLowerCase() !== original.toLowerCase()) {
-      warnings.push("The back-translation differs from your original. Please review carefully.");
-    }
-
-    await recordUsage(session.user.id, "AI_TRANSLATE", {
-      input: backMsg.usage.input_tokens,
-      output: backMsg.usage.output_tokens,
-    });
-
+    const backTranslation = await translateText(translation.slice(0, MAX_TEXT), guestLanguage, hostLanguage);
+    const missing = missingTokens(original, translation);
+    const warnings = missing.length ? [`These were changed or missing, check them: ${missing.join(", ")}`] : [];
     return { translation, backTranslation, warnings };
-  } catch {
-    return { translation, backTranslation: original, warnings: ["Back-translation failed"] };
+  } catch (e) {
+    return { translation, backTranslation: original, warnings: ["Back-translation failed"], error: e instanceof ReplyTranslationError ? e.message : "Could not check right now." };
   }
 }
 
@@ -130,16 +84,20 @@ export async function sendLeadReply(
 ): Promise<SimpleState> {
   const session = await requireOwner();
   const lead = await prisma.lead.findFirst({
-    where: { id: leadId, ownerId: session.user.id },
+    where: { id: leadId, ownerId: session.id },
     include: { apartment: true },
   });
   if (!lead) return { error: "Lead not found" };
 
+  const body = text.trim();
+  if (!body) return { error: "Write a message first." };
+  if (body.length > MAX_TEXT) return { error: `Keep it under ${MAX_TEXT} characters.` };
+
   try {
     const { sid } = await sendWhatsApp({
       to: lead.phone,
-      text,
-      ownerId: session.user.id,
+      text: body,
+      ownerId: session.id,
       kind: "WA_FREEFORM",
     });
 
@@ -148,9 +106,9 @@ export async function sendLeadReply(
         leadId,
         direction: "OUTBOUND",
         author: "HOST",
-        body: text,
-        originalBody: text !== original ? original : null,
-        language: lead.language ?? session.user.defaultGuestLanguage,
+        body,
+        originalBody: saveOriginalBody(original, body),
+        language: lead.language ?? session.defaultGuestLanguage,
         twilioSid: sid,
         deliveryStatus: sid ? "queued" : "dry-run",
       },
@@ -177,9 +135,9 @@ export async function sendLeadReply(
         leadId,
         direction: "OUTBOUND",
         author: "HOST",
-        body: text,
-        originalBody: text !== original ? original : null,
-        language: lead.language ?? session.user.defaultGuestLanguage,
+        body,
+        originalBody: saveOriginalBody(original, body),
+        language: lead.language ?? session.defaultGuestLanguage,
         deliveryStatus: "failed",
         errorCode: e instanceof WhatsAppError ? e.code ?? null : null,
       },
@@ -195,7 +153,7 @@ export async function resolveLeadConversation(leadId: string): Promise<void> {
       leadId,
       escalated: true,
       resolved: false,
-      lead: { ownerId: session.user.id },
+      lead: { ownerId: session.id },
     },
     data: { resolved: true, resolvedAt: new Date() },
   });
@@ -206,7 +164,7 @@ export async function resolveLeadConversation(leadId: string): Promise<void> {
 export async function reopenLeadMessage(messageId: string): Promise<void> {
   const session = await requireOwner();
   const message = await prisma.leadMessage.findFirst({
-    where: { id: messageId, lead: { ownerId: session.user.id } },
+    where: { id: messageId, lead: { ownerId: session.id } },
   });
   if (!message) return;
 
@@ -229,25 +187,23 @@ export async function convertLeadToBooking(
   const session = await requireOwner();
 
   const lead = await prisma.lead.findFirst({
-    where: { id: leadId, ownerId: session.user.id },
+    where: { id: leadId, ownerId: session.id },
   });
   if (!lead) return { error: "Lead not found" };
 
   const apartment = await prisma.apartment.findFirst({
-    where: { id: apartmentId, ownerId: session.user.id },
+    where: { id: apartmentId, ownerId: session.id },
   });
   if (!apartment) return { error: "Apartment not found" };
 
+  const validationErrors = validateDateRange(checkIn, checkOut);
+  if (validationErrors) {
+    const error = validationErrors.fieldErrors?.endDate?.[0] || validationErrors.fieldErrors?.startDate?.[0] || "Invalid dates";
+    return { error };
+  }
+
   const checkInDate = new Date(checkIn);
   const checkOutDate = new Date(checkOut);
-
-  if (isNaN(checkInDate.getTime()) || isNaN(checkOutDate.getTime())) {
-    return { error: "Invalid dates" };
-  }
-
-  if (checkOutDate <= checkInDate) {
-    return { error: "Check-out must be after check-in" };
-  }
 
   try {
     const booking = await prisma.booking.create({

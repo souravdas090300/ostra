@@ -4,13 +4,13 @@ import { inboxCounts } from "@/lib/inbox-data";
 import { formatPhone } from "@/lib/phone";
 import Link from "next/link";
 
-export default async function LeadsPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+export default async function LeadsPage({ searchParams }: { readonly searchParams: Promise<{ tab?: string }> }) {
   const session = await requireOwner();
   const params = await searchParams;
   const tab = params.tab ?? "needs";
-  const counts = await inboxCounts(session.user.id);
+  const counts = await inboxCounts(session.id);
 
-  const rows = await loadLeads(session.user.id);
+  const rows = await loadLeads(session.id);
   const filtered = tab === "needs" ? rows.filter((r) => r.unresolved > 0) : rows;
 
   return (

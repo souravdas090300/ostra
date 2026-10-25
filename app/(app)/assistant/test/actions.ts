@@ -25,7 +25,7 @@ export async function testAssistant(
   const owner = await requireOwner();
 
   const apartment = await prisma.apartment.findFirst({
-    where: { id: apartmentId, ownerId: owner.user.id },
+    where: { id: apartmentId, ownerId: owner.id },
   });
 
   if (!apartment) {
@@ -46,7 +46,7 @@ export async function testAssistant(
 
   try {
     const result = await answerGuest({
-      hostLanguage: owner.user.hostLanguage,
+      hostLanguage: owner.hostLanguage,
       apartment: {
         name: apartment.name,
         address: apartment.address,
@@ -58,7 +58,7 @@ export async function testAssistant(
       booking,
       unlocked: !pretendGuestArrivesInAFewDays && detailsUnlocked(booking, now),
       today: todayMalta(now),
-      knownLanguage: owner.user.defaultGuestLanguage,
+      knownLanguage: owner.defaultGuestLanguage,
       history: buildHistory([], message),
       allowedText: [apartment.info, apartment.publicInfo, apartment.address, apartment.reviewUrl ?? ""].join("\n"),
     });

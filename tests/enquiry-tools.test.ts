@@ -12,8 +12,8 @@ describe("E2 - Enquiry Tool Runner", () => {
     leadId: "lead-1",
     now: new Date("2026-10-25T10:00:00Z"),
     results: new Map(),
-    saved: {},
-    allowedAmounts: new Set(),
+    saved: {} as Record<string, any>,
+    allowedAmounts: new Set<number>(),
     allowedText: "Apartment info text",
   };
 

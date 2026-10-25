@@ -39,7 +39,7 @@ export async function POST(formData: FormData) {
 
 export async function updateTemplate(formData: FormData) {
   const session = await requireOwner();
-  const ownerId = session.user.id;
+  const ownerId = session.id;
 
   const templateId = formData.get("templateId") as string;
   const body = formData.get("body") as string;
@@ -104,7 +104,7 @@ export async function updateTemplate(formData: FormData) {
 
 export async function addTranslation(formData: FormData) {
   const session = await requireOwner();
-  const ownerId = session.user.id;
+  const ownerId = session.id;
 
   const templateId = formData.get("templateId") as string;
   const language = formData.get("language") as string;
@@ -139,7 +139,7 @@ export async function addTranslation(formData: FormData) {
 
 export async function editTranslation(formData: FormData) {
   const session = await requireOwner();
-  const ownerId = session.user.id;
+  const ownerId = session.id;
 
   const translationId = formData.get("translationId") as string;
   const body = formData.get("body") as string;
@@ -150,7 +150,7 @@ export async function editTranslation(formData: FormData) {
 
 export async function regenerateTranslation(formData: FormData) {
   const session = await requireOwner();
-  const ownerId = session.user.id;
+  const ownerId = session.id;
 
   const templateId = formData.get("templateId") as string;
   const language = formData.get("language") as string;
@@ -191,7 +191,7 @@ export async function regenerateTranslation(formData: FormData) {
 
 export async function submitForApproval(formData: FormData) {
   const session = await requireOwner();
-  const ownerId = session.user.id;
+  const ownerId = session.id;
 
   const translationId = formData.get("translationId") as string;
 
@@ -201,7 +201,7 @@ export async function submitForApproval(formData: FormData) {
 
 export async function syncApprovals() {
   const session = await requireOwner();
-  const ownerId = session.user.id;
+  const ownerId = session.id;
 
   // Only sync this owner's templates
   const pending = await prisma.templateTranslation.findMany({
@@ -221,7 +221,7 @@ export async function syncApprovals() {
 
 export async function removeTranslation(formData: FormData) {
   const session = await requireOwner();
-  const ownerId = session.user.id;
+  const ownerId = session.id;
 
   const translationId = formData.get("translationId") as string;
 
@@ -246,7 +246,7 @@ export async function removeTranslation(formData: FormData) {
 
 export async function updateFallbackLanguage(formData: FormData) {
   const session = await requireOwner();
-  const ownerId = session.user.id;
+  const ownerId = session.id;
 
   const fallbackLanguage = formData.get("fallbackLanguage") as string;
 

@@ -10,16 +10,16 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
   const session = await requireOwner();
   const params = await searchParams;
   const tab = params.tab ?? "needs";
-  const counts = await inboxCounts(session.user.id);
+  const counts = await inboxCounts(session.id);
 
   if (tab === "unknown") {
     const unmatched = await prisma.unmatchedMessage.findMany({
-      where: { ownerId: session.user.id, handledAt: null, receivedAt: { gte: new Date(Date.now() - 30 * 86_400_000) } },
+      where: { ownerId: session.id, handledAt: null, receivedAt: { gte: new Date(Date.now() - 30 * 86_400_000) } },
       orderBy: { receivedAt: "desc" },
     });
     const bookings = await prisma.booking.findMany({
       where: {
-        apartment: { ownerId: session.user.id },
+        apartment: { ownerId: session.id },
         isBlock: false,
         status: "CONFIRMED",
         OR: [
@@ -105,7 +105,7 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
     );
   }
 
-  const rows = await loadInbox(session.user.id);
+  const rows = await loadInbox(session.id);
   const filtered = tab === "needs" ? rows.filter((r) => r.unresolved > 0) : rows;
 
   return (

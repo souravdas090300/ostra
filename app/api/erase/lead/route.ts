@@ -15,7 +15,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "scope must be 'lead' or 'phone'" }, { status: 400 });
   }
 
-  const result = await eraseLeadData(session.user.id, leadId, scope);
+  const result = await eraseLeadData(session.id, leadId, scope);
 
   return NextResponse.json(result);
 }

@@ -13,23 +13,13 @@ import { WhatsAppError, sendWhatsApp } from "@/lib/whatsapp";
 import { answerInbound } from "@/lib/inbound";
 import { rescheduleBookings } from "@/lib/schedule";
 import { log } from "@/lib/log";
+import { echo, MAX_TEXT, SimpleState, InboxPreviewState, saveOriginalBody } from "@/lib/validation";
 
-export type PreviewState = {
-  ok?: boolean;
-  error?: string;
-  sameLanguage?: boolean;
-  guestLanguage?: string;
-  translation?: string;
-  backTranslation?: string;
-  warnings?: string[];
-};
-export type SimpleState = { ok?: boolean; error?: string };
-
-const MAX_TEXT = 1500;
+export type PreviewState = InboxPreviewState;
 
 async function ownThread(bookingId: string) {
   const session = await requireOwner();
-  const t = await loadThread(session.user.id, bookingId);
+  const t = await loadThread(session.id, bookingId);
   if (!t) notFound();
   return { session, t };
 }
@@ -40,12 +30,12 @@ export async function previewReply(bookingId: string, text: string): Promise<Pre
   const clean = text.trim();
   if (!clean) return { error: "Write a message first." };
   if (clean.length > MAX_TEXT) return { error: `Keep it under ${MAX_TEXT} characters.` };
-  const guestLanguage = resolveGuestLanguage(t.booking.guestLanguage, t.lastDetected, session.user.defaultGuestLanguage);
-  if (guestLanguage === session.user.hostLanguage) return { ok: true, sameLanguage: true, guestLanguage };
-  if (!rateLimit(`translate:${session.user.id}`, 60, 3_600_000)) return { error: "Too many translations this hour. Try again later." };
+  const guestLanguage = resolveGuestLanguage(t.booking.guestLanguage, t.lastDetected, session.defaultGuestLanguage);
+  if (guestLanguage === session.hostLanguage) return { ok: true, sameLanguage: true, guestLanguage };
+  if (!rateLimit(`translate:${session.id}`, 60, 3_600_000)) return { error: "Too many translations this hour. Try again later." };
   try {
-    const translation = await translateText(clean, session.user.hostLanguage, guestLanguage);
-    const backTranslation = await translateText(translation, guestLanguage, session.user.hostLanguage);
+    const translation = await translateText(clean, session.hostLanguage, guestLanguage);
+    const backTranslation = await translateText(translation, guestLanguage, session.hostLanguage);
     const missing = missingTokens(clean, translation);
     return {
       ok: true,
@@ -62,10 +52,10 @@ export async function previewReply(bookingId: string, text: string): Promise<Pre
 /** Re-check a translation the host edited by hand. */
 export async function recheckTranslation(bookingId: string, edited: string, original: string): Promise<PreviewState> {
   const { session, t } = await ownThread(bookingId);
-  const guestLanguage = resolveGuestLanguage(t.booking.guestLanguage, t.lastDetected, session.user.defaultGuestLanguage);
-  if (!rateLimit(`translate:${session.user.id}`, 60, 3_600_000)) return { error: "Too many translations this hour. Try again later." };
+  const guestLanguage = resolveGuestLanguage(t.booking.guestLanguage, t.lastDetected, session.defaultGuestLanguage);
+  if (!rateLimit(`translate:${session.id}`, 60, 3_600_000)) return { error: "Too many translations this hour. Try again later." };
   try {
-    const backTranslation = await translateText(edited.slice(0, MAX_TEXT), guestLanguage, session.user.hostLanguage);
+    const backTranslation = await translateText(edited.slice(0, MAX_TEXT), guestLanguage, session.hostLanguage);
     const missing = missingTokens(original, edited);
     return {
       ok: true,
@@ -112,7 +102,7 @@ export async function sendReply(
   });
   if (dup) return { ok: true };
 
-  const language = resolveGuestLanguage(t.booking.guestLanguage, t.lastDetected, session.user.defaultGuestLanguage);
+  const language = resolveGuestLanguage(t.booking.guestLanguage, t.lastDetected, session.defaultGuestLanguage);
   try {
     const { sid } = await sendWhatsApp({ to: t.booking.guestPhone, text: body });
     await prisma.message.create({
@@ -122,7 +112,7 @@ export async function sendReply(
         author: "HOST",
         body,
         language,
-        originalBody: original.trim() && original.trim() !== body ? original.trim().slice(0, MAX_TEXT) : null,
+        originalBody: saveOriginalBody(original, body),
         twilioSid: sid,
         deliveryStatus: sid ? "queued" : "dry-run",
       },
@@ -155,7 +145,7 @@ export async function resolveConversation(bookingId: string): Promise<void> {
 export async function reopenMessage(messageId: string): Promise<void> {
   const session = await requireOwner();
   const { count } = await prisma.message.updateMany({
-    where: { id: messageId, escalated: true, booking: { apartment: { ownerId: session.user.id } } },
+    where: { id: messageId, escalated: true, booking: { apartment: { ownerId: session.id } } },
     data: { resolved: false, resolvedAt: null, reminderSentAt: null },
   });
   if (count === 0) notFound();
@@ -172,7 +162,7 @@ export async function appendToInfo(
   const clean = text.trim();
   if (!clean) return { error: "Nothing to save." };
   if (clean.length > 2000) return { error: "Keep it under 2000 characters." };
-  const apt = await prisma.apartment.findFirst({ where: { id: apartmentId, ownerId: session.user.id } });
+  const apt = await prisma.apartment.findFirst({ where: { id: apartmentId, ownerId: session.id } });
   if (!apt) notFound();
   const HEADING = "FROM GUEST QUESTIONS";
   const current = apt[target];
@@ -186,7 +176,7 @@ export async function appendToInfo(
 export async function dismissUnmatched(id: string): Promise<void> {
   const session = await requireOwner();
   const { count } = await prisma.unmatchedMessage.updateMany({
-    where: { id, ownerId: session.user.id },
+    where: { id, ownerId: session.id },
     data: { handledAt: new Date() },
   });
   if (count === 0) notFound();
@@ -198,10 +188,10 @@ export async function linkUnmatchedToBooking(unmatchedId: string, bookingId: str
   const session = await requireOwner();
   const now = new Date();
   const u = await prisma.unmatchedMessage.findFirst({
-    where: { id: unmatchedId, ownerId: session.user.id, handledAt: null },
+    where: { id: unmatchedId, ownerId: session.id, handledAt: null },
   });
   const booking = await prisma.booking.findFirst({
-    where: { id: bookingId, isBlock: false, status: "CONFIRMED", apartment: { ownerId: session.user.id } },
+    where: { id: bookingId, isBlock: false, status: "CONFIRMED", apartment: { ownerId: session.id } },
     include: { apartment: true },
   });
   if (!u || !booking) return { error: "Not found." };
@@ -212,7 +202,7 @@ export async function linkUnmatchedToBooking(unmatchedId: string, bookingId: str
   // Only messages from the last 24 hours (the open reply window), oldest first, at most 5.
   const pending = await prisma.unmatchedMessage.findMany({
     where: {
-      ownerId: session.user.id,
+      ownerId: session.id,
       phone: u.phone,
       handledAt: null,
       receivedAt: { gte: new Date(now.getTime() - 24 * 3_600_000) },
@@ -248,7 +238,7 @@ export async function linkUnmatchedToBooking(unmatchedId: string, bookingId: str
     after(async () => {
       try {
         await answerInbound({
-          owner: { id: session.user.id, email: session.user.email, hostLanguage: session.user.hostLanguage, defaultGuestLanguage: session.user.defaultGuestLanguage },
+          owner: { id: session.id, email: session.email, hostLanguage: session.hostLanguage, defaultGuestLanguage: session.defaultGuestLanguage },
           booking,
           apartment: booking.apartment,
           inbound,
@@ -287,7 +277,7 @@ export async function setAnswerFeedback(
   const message = await prisma.message.findFirst({
     where: {
       id: messageId,
-      booking: { apartment: { ownerId: session.user.id } },
+      booking: { apartment: { ownerId: session.id } },
     },
   });
 

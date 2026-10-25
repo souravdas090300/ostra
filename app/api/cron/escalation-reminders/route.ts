@@ -1,14 +1,12 @@
 import { prisma } from "@/lib/db";
-import { reportError } from "@/lib/report-error";
 import { withJobRun } from "@/lib/job-run";
 import { notifyHost } from "@/lib/notify";
 import { revalidatePath } from "next/cache";
+import { requireCronAuth } from "@/lib/cron-auth";
 
 export async function POST(req: Request) {
-  const authHeader = req.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return new Response("Unauthorized", { status: 401 });
-  }
+  const authError = requireCronAuth(req);
+  if (authError) return authError;
 
   const result = await withJobRun("escalation-reminders", async () => {
     const now = new Date();

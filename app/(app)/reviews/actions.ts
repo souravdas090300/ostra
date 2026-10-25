@@ -1,9 +1,8 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requireOwner } from "@/lib/auth";
-import { draftReviewReply, type DraftResult } from "@/lib/review-draft";
+import { draftReviewReply } from "@/lib/review-draft";
 
 export type DraftState = {
   success: boolean;
@@ -37,7 +36,7 @@ export async function draftReply(formData: FormData): Promise<DraftState> {
   // Validate apartment belongs to owner if provided
   if (apartmentId) {
     const apt = await prisma.apartment.findFirst({
-      where: { id: apartmentId, ownerId: session.user.id },
+      where: { id: apartmentId, ownerId: session.id },
     });
     if (!apt) {
       return { success: false, error: "Apartment not found" };
@@ -45,7 +44,7 @@ export async function draftReply(formData: FormData): Promise<DraftState> {
   }
 
   const result = await draftReviewReply({
-    ownerId: session.user.id,
+    ownerId: session.id,
     review: review.trim(),
     stars,
     platform,

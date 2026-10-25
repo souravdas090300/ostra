@@ -5,7 +5,7 @@ import { AssistantTester } from "./AssistantTester";
 export default async function TestAssistantPage() {
   const owner = await requireOwner();
   const apartments = await prisma.apartment.findMany({
-    where: { ownerId: owner.user.id },
+    where: { ownerId: owner.id },
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });

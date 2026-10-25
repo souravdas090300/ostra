@@ -6,10 +6,10 @@ import { inboxCounts } from "@/lib/inbox-data";
 export default async function AppLayout({
   children,
 }: {
-  children: React.ReactNode;
+  readonly children: React.ReactNode;
 }) {
   const session = await requireOwner();
-  const counts = await inboxCounts(session.user.id);
+  const counts = await inboxCounts(session.id);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -88,7 +88,7 @@ export default async function AppLayout({
             </div>
             <div className="flex items-center">
               <span className="text-sm text-gray-700 mr-4">
-                {session.user?.email}
+                {session.email}
               </span>
               <SignOutButton />
             </div>

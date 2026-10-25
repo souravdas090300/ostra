@@ -1,7 +1,7 @@
-import { requireOwner } from "@/lib/auth";
 import { collectGuestData } from "@/lib/guest-data";
 import { prisma } from "@/lib/db";
 import { NextResponse } from "next/server";
+import { requireOwner } from "@/lib/auth";
 
 export async function GET(req: Request) {
   const session = await requireOwner();
@@ -19,14 +19,14 @@ export async function GET(req: Request) {
     include: { apartment: true },
   });
 
-  if (!booking || booking.apartment.ownerId !== session.user.id) {
+  if (!booking || booking.apartment.ownerId !== session.id) {
     return NextResponse.json({ error: "Booking not found" }, { status: 404 });
   }
 
   // Audit log
   await prisma.auditLog.create({
     data: {
-      ownerId: session.user.id,
+      ownerId: session.id,
       action: "EXPORT_GUEST",
       targetType: "booking",
       targetId: bookingId,
@@ -36,14 +36,14 @@ export async function GET(req: Request) {
   const bookingIds = scope === "phone" && booking.guestPhone
     ? (await prisma.booking.findMany({
         where: {
-          apartment: { ownerId: session.user.id },
+          apartment: { ownerId: session.id },
           guestPhone: booking.guestPhone,
         },
         select: { id: true },
       })).map((b) => b.id)
     : [bookingId];
 
-  const data = await collectGuestData(session.user.id, bookingIds);
+  const data = await collectGuestData(session.id, bookingIds);
 
   return NextResponse.json(data, {
     headers: {

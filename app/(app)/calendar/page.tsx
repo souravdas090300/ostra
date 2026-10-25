@@ -21,7 +21,7 @@ export default async function CalendarPage({
   const days = sp.days === "28" ? 28 : 14;
   const from = parseFromParam(sp.from, today) ?? today;
 
-  const data = await loadCalendarData(session.user.id, from, days, today);
+  const data = await loadCalendarData(session.id, from, days, today);
 
   if (data.apartments.length === 0) {
     return (

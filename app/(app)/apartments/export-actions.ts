@@ -13,17 +13,19 @@ const VALID_TARGETS = new Set(TARGETS);
 export async function ensureExportFeeds(apartmentId: string): Promise<void> {
   const session = await requireOwner();
   const apartment = await prisma.apartment.findFirst({
-    where: { id: apartmentId, ownerId: session.user.id },
+    where: { id: apartmentId, ownerId: session.id },
   });
   if (!apartment) notFound();
 
-  for (const target of TARGETS) {
-    await prisma.exportFeed.upsert({
-      where: { apartmentId_target: { apartmentId, target } },
-      update: {},
-      create: { apartmentId, target, token: newExportToken() },
-    });
-  }
+  await Promise.all(
+    TARGETS.map((target) =>
+      prisma.exportFeed.upsert({
+        where: { apartmentId_target: { apartmentId, target } },
+        update: {},
+        create: { apartmentId, target, token: newExportToken() },
+      })
+    )
+  );
 }
 
 export async function enableExport(apartmentId: string, target: "AIRBNB" | "BOOKING_COM"): Promise<ExportActionResult> {
@@ -31,7 +33,7 @@ export async function enableExport(apartmentId: string, target: "AIRBNB" | "BOOK
   if (!VALID_TARGETS.has(target)) return { error: "Invalid target platform" };
 
   const { count } = await prisma.exportFeed.updateMany({
-    where: { apartmentId, target, apartment: { ownerId: session.user.id } },
+    where: { apartmentId, target, apartment: { ownerId: session.id } },
     data: { enabled: true, enabledAt: new Date() },
   });
   if (count === 0) notFound();
@@ -45,7 +47,7 @@ export async function disableExport(apartmentId: string, target: "AIRBNB" | "BOO
   if (!VALID_TARGETS.has(target)) return { error: "Invalid target platform" };
 
   const { count } = await prisma.exportFeed.updateMany({
-    where: { apartmentId, target, apartment: { ownerId: session.user.id } },
+    where: { apartmentId, target, apartment: { ownerId: session.id } },
     data: { enabled: false },
   });
   if (count === 0) notFound();
@@ -59,7 +61,7 @@ export async function confirmExport(apartmentId: string, target: "AIRBNB" | "BOO
   if (!VALID_TARGETS.has(target)) return { error: "Invalid target platform" };
 
   const { count } = await prisma.exportFeed.updateMany({
-    where: { apartmentId, target, apartment: { ownerId: session.user.id } },
+    where: { apartmentId, target, apartment: { ownerId: session.id } },
     data: { confirmedAt: confirmed ? new Date() : null },
   });
   if (count === 0) notFound();
@@ -73,7 +75,7 @@ export async function regenerateExportToken(apartmentId: string, target: "AIRBNB
   if (!VALID_TARGETS.has(target)) return { error: "Invalid target platform" };
 
   const { count } = await prisma.exportFeed.updateMany({
-    where: { apartmentId, target, apartment: { ownerId: session.user.id } },
+    where: { apartmentId, target, apartment: { ownerId: session.id } },
     data: {
       token: newExportToken(),
       lastFetchedAt: null,

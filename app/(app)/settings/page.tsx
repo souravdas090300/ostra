@@ -7,7 +7,7 @@ import Link from "next/link";
 export default async function SettingsPage() {
   const session = await requireOwner();
   const ownerData = await prisma.owner.findUnique({
-    where: { id: session.user.id },
+    where: { id: session.id },
     select: { hostLanguage: true, defaultGuestLanguage: true },
   });
   if (!ownerData) {
@@ -24,6 +24,9 @@ export default async function SettingsPage() {
         </Link>
         <Link href="/settings/messages" className="block text-blue-600 hover:text-blue-800">
           Message templates →
+        </Link>
+        <Link href="/settings/summary" className="block text-blue-600 hover:text-blue-800">
+          Weekly summary email →
         </Link>
         <Link href="/settings/password" className="block text-blue-600 hover:text-blue-800">
           Change password →

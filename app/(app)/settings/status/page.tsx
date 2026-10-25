@@ -23,7 +23,7 @@ export default async function StatusPage() {
 
   // Get feeds with last success
   const feeds = await prisma.calendarFeed.findMany({
-    where: { apartment: { ownerId: session.user.id } },
+    where: { apartment: { ownerId: session.id } },
     select: {
       id: true,
       apartment: { select: { name: true } },
@@ -35,7 +35,7 @@ export default async function StatusPage() {
 
   // Get export feeds
   const exportFeeds = await prisma.exportFeed.findMany({
-    where: { apartment: { ownerId: session.user.id } },
+    where: { apartment: { ownerId: session.id } },
     include: { apartment: { select: { name: true } } },
   });
   const now = new Date();
@@ -45,14 +45,14 @@ export default async function StatusPage() {
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60_000);
   const failedScheduled = await prisma.scheduledMessage.count({
     where: {
-      booking: { apartment: { ownerId: session.user.id } },
+      booking: { apartment: { ownerId: session.id } },
       status: "FAILED",
       createdAt: { gte: sevenDaysAgo },
     },
   });
   const failedOutbound = await prisma.message.count({
     where: {
-      booking: { apartment: { ownerId: session.user.id } },
+      booking: { apartment: { ownerId: session.id } },
       direction: "OUTBOUND",
       deliveryStatus: { in: ["failed", "undelivered"] },
       createdAt: { gte: sevenDaysAgo },
@@ -62,7 +62,7 @@ export default async function StatusPage() {
   // Get AI feedback from last 7 days
   const feedbackGood = await prisma.message.count({
     where: {
-      booking: { apartment: { ownerId: session.user.id } },
+      booking: { apartment: { ownerId: session.id } },
       author: "AI",
       direction: "OUTBOUND",
       feedback: "GOOD",
@@ -71,7 +71,7 @@ export default async function StatusPage() {
   });
   const feedbackWrong = await prisma.message.count({
     where: {
-      booking: { apartment: { ownerId: session.user.id } },
+      booking: { apartment: { ownerId: session.id } },
       author: "AI",
       direction: "OUTBOUND",
       feedback: "WRONG",
@@ -80,7 +80,7 @@ export default async function StatusPage() {
   });
 
   // Get wrong answers with context
-  const wrongAnswers = await loadWrongAnswers(session.user.id, sevenDaysAgo);
+  const wrongAnswers = await loadWrongAnswers(session.id, sevenDaysAgo);
 
   return (
     <div className="space-y-6">

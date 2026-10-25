@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { syncAllFeeds } from "@/lib/sync";
-import { cronAuthorized } from "@/lib/cron-auth";
+import { requireCronAuth } from "@/lib/cron-auth";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 export async function POST(req: Request) {
-  if (!cronAuthorized(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authError = requireCronAuth(req);
+  if (authError) return authError;
   const results = await syncAllFeeds();
   return NextResponse.json({
     feeds: results.length,

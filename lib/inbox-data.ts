@@ -70,10 +70,21 @@ export async function loadThread(ownerId: string, bookingId: string) {
     where: { bookingId },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: 200,
-  })).reverse();
+  })).reverse().map((m) => ({
+    ...m,
+    author: m.author ?? undefined,
+    deliveryStatus: m.deliveryStatus ?? undefined,
+    originalBody: m.originalBody ?? undefined,
+    feedback: m.feedback as "GOOD" | "WRONG" | null | undefined,
+    feedbackNote: m.feedbackNote ?? undefined,
+  }));
   const lastGuest = [...messages].reverse().find((m) => m.direction === "INBOUND") ?? null;
   const lastDetected = [...messages].reverse().find((m) => m.direction === "INBOUND" && m.language)?.language ?? null;
-  const unresolved = messages.filter((m) => m.escalated && !m.resolved);
+  const unresolved = messages.filter((m) => m.escalated && !m.resolved).map((m) => ({
+    ...m,
+    hostSummary: m.hostSummary ?? undefined,
+    escalationReason: m.escalationReason ?? undefined,
+  }));
   return { booking, messages, lastGuestAt: lastGuest?.createdAt ?? null, lastDetected, unresolved };
 }
 

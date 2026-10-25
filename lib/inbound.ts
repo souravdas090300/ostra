@@ -12,8 +12,7 @@ import { log } from "./log";
 import { assistantEnabled } from "./flags";
 import { assertAiBudget, recordUsage, checkAndSendBudgetWarning, BudgetExceededError } from "./usage";
 import { handleEnquiry } from "./enquiry";
-
-export type InboundInput = { sid: string; from: string; to: string; body: string; numMedia: number };
+import { HOUR, E164, STOP_CONFIRM, UNMATCHED_REPLY, type InboundInput } from "./shared-constants";
 
 export type AnswerInboundInput = {
   owner: { id: string; email: string; hostLanguage: string; defaultGuestLanguage: string };
@@ -22,16 +21,6 @@ export type AnswerInboundInput = {
   inbound: { id: string; body: string; hasMedia: boolean; createdAt: Date };
   from: string;
   now: Date;
-};
-
-const HOUR = 3_600_000;
-const E164 = /^\+\d{8,15}$/;
-const STOP_CONFIRM: Record<string, string> = {
-  en: "You will no longer receive messages from us.",
-  it: "Non riceverai più messaggi da noi.",
-  de: "Sie erhalten keine Nachrichten mehr von uns.",
-  fr: "Vous ne recevrez plus de messages de notre part.",
-  es: "Ya no recibirá mensajes nuestros.",
 };
 
 const isUnique = (e: unknown) => e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002";

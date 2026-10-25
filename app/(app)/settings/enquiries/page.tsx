@@ -5,7 +5,7 @@ import { toggleEnquiries } from "./actions";
 export default async function EnquiriesSettingsPage() {
   const session = await requireOwner();
   const ownerData = await prisma.owner.findUnique({
-    where: { id: session.user.id },
+    where: { id: session.id },
     select: { enquiriesEnabled: true },
   });
   if (!ownerData) {

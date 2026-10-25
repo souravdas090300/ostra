@@ -5,7 +5,7 @@ import { requireOwner } from "@/lib/auth";
 export default async function ApartmentsPage() {
   const session = await requireOwner();
   const apartments = await prisma.apartment.findMany({
-    where: { ownerId: session.user.id },
+    where: { ownerId: session.id },
     orderBy: { name: "asc" },
     include: { _count: { select: { feeds: true } } },
   });

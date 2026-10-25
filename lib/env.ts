@@ -11,8 +11,8 @@ const envSchema = z.object({
 const parsed = envSchema.safeParse(process.env);
 
 if (!parsed.success) {
-  const missing = parsed.error.errors
-    .map((e) => e.path.join("."))
+  const missing = parsed.error.issues
+    .map((e: any) => e.path.join("."))
     .join(", ");
   throw new Error(`Missing required environment variables: ${missing}`);
 }
