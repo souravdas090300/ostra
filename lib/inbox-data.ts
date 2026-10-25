@@ -78,8 +78,8 @@ export async function loadThread(ownerId: string, bookingId: string) {
 }
 
 /** For the navigation badge. */
-export async function inboxCounts(ownerId: string) {
-  const [needs, urgent, unknown] = await Promise.all([
+export async function inboxCounts(ownerId: string): Promise<{ needs: number; urgent: number; unknown: number; leadsNeeds: number }> {
+  const [needs, urgent, unknown, leadsNeeds] = await Promise.all([
     prisma.message.count({
       where: { escalated: true, resolved: false, booking: { apartment: { ownerId } } },
     }),
@@ -89,8 +89,11 @@ export async function inboxCounts(ownerId: string) {
     prisma.unmatchedMessage.count({
       where: { ownerId, handledAt: null, receivedAt: { gte: new Date(Date.now() - 30 * 86_400_000) } },
     }),
+    prisma.leadMessage.count({
+      where: { escalated: true, resolved: false, lead: { ownerId } },
+    }),
   ]);
-  return { needs, urgent, unknown };
+  return { needs, urgent, unknown, leadsNeeds };
 }
 
 export type WrongAnswer = {

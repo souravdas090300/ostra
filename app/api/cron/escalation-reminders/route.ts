@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     const now = new Date();
     const oneHourAgo = new Date(now.getTime() - 60 * 60_000);
 
-    // Find unresolved escalated messages that haven't had a reminder in the last hour
+    // Find unresolved escalated booking messages that haven't had a reminder
     const needsReminder = await prisma.message.findMany({
       where: {
         escalated: true,
@@ -30,6 +30,23 @@ export async function POST(req: Request) {
                 owner: true,
               },
             },
+          },
+        },
+      },
+    });
+
+    // Find unresolved escalated lead messages that haven't had a reminder
+    const needsLeadReminder = await prisma.leadMessage.findMany({
+      where: {
+        escalated: true,
+        resolved: false,
+        reminderSentAt: null,
+        createdAt: { lt: oneHourAgo },
+      },
+      include: {
+        lead: {
+          include: {
+            owner: true,
           },
         },
       },
@@ -52,9 +69,25 @@ export async function POST(req: Request) {
       reminded++;
     }
 
-    revalidatePath("/inbox");
+    for (const message of needsLeadReminder) {
+      await notifyHost({
+        to: message.lead.owner.email,
+        subject: `Reminder: Enquiry needs your attention`,
+        text: `${message.hostSummary}\n\nOpen: ${process.env.APP_URL}/leads/${message.leadId}`,
+      });
 
-    return { reminded };
+      await prisma.leadMessage.update({
+        where: { id: message.id },
+        data: { reminderSentAt: now },
+      });
+
+      reminded++;
+    }
+
+    revalidatePath("/inbox");
+    revalidatePath("/leads");
+
+    return { reminded, bookingReminders: needsReminder.length, leadReminders: needsLeadReminder.length };
   });
 
   return Response.json(result);

@@ -24,6 +24,7 @@ model Owner {
   monthlyTemplateCap  Int         @default(1000)
   waTemplateCost      String      @default("0")
   budgetWarnedMonth   String?
+  enquiriesEnabled    Boolean     @default(false)
   createdAt           DateTime    @default(now())
   updatedAt           DateTime    @updatedAt
 
@@ -302,25 +303,30 @@ model Rate {
 }
 
 model Lead {
-  id            String     @id @default(cuid())
-  ownerId       String
-  owner         Owner      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  phone         String
-  name          String?
-  status        String     @default("NEW") // NEW, QUOTED, NEEDS_HOST, BOOKED, LOST
-  checkIn       DateTime?
-  checkOut      DateTime?
-  guests        Int?
-  apartmentId   String?
-  apartment     Apartment? @relation(fields: [apartmentId], references: [id], onDelete: SetNull)
-  quotedCents   Int?
-  language      String?
-  notes         String?
-  bookingId     String?                       // set when converted
-  blockedAt     DateTime?                     // host blocked this number: no reply, nothing stored
-  lastInboundAt DateTime   @default(now())
-  createdAt     DateTime   @default(now())
-  messages      LeadMessage[]
+  id                 String     @id @default(cuid())
+  ownerId            String
+  owner              Owner      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  phone              String
+  name               String?
+  status             String     @default("NEW") // NEW, QUOTED, NEEDS_HOST, BOOKED, LOST
+  checkIn            DateTime?
+  checkOut           DateTime?
+  guests             Int?
+  apartmentId        String?
+  apartment          Apartment? @relation(fields: [apartmentId], references: [id], onDelete: SetNull)
+  quotedCents        Int?
+  language           String?
+  notes              String?
+  bookingId          String?                       // set when converted
+  convertedBookingId String?                       // Booking id when converted (for link)
+  blockedAt          DateTime?                     // host blocked this number: no reply, nothing stored
+  lastInboundAt      DateTime   @default(now())
+  lastOutboundAt     DateTime?
+  hostSummary        String?                       // for the host, in the host's language
+  needsHostReason    String?
+  urgent             Boolean    @default(false)
+  createdAt          DateTime   @default(now())
+  messages           LeadMessage[]
 
   @@unique([ownerId, phone])
   @@index([ownerId, status, lastInboundAt])

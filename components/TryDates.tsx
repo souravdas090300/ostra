@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { tryDates } from "@/app/(app)/apartments/actions";
+import { reasonToText } from "@/lib/availability-core";
 
 export function TryDates({ apartmentId }: { apartmentId: string }) {
   const [checkIn, setCheckIn] = useState("");
@@ -114,23 +115,11 @@ export function TryDates({ apartmentId }: { apartmentId: string }) {
           ) : (
             <div>
               <p className="text-red-600 font-medium">Not available</p>
-              <p className="text-sm">{getReasonText(result.reason)}</p>
+              <p className="text-sm">{result.reason ? reasonToText(result.reason as any) : "Not available"}</p>
             </div>
           )}
         </div>
       )}
     </div>
   );
-}
-
-function getReasonText(reason: string): string {
-  const reasons: Record<string, string> = {
-    PAST_DATE: "Check-in date is in the past",
-    TOO_LONG: "Stay is too long (maximum 90 nights)",
-    TOO_MANY_GUESTS: "Too many guests for this apartment",
-    MIN_NIGHTS: "Stay is too short (minimum nights requirement)",
-    BOOKED: "Dates are already booked or blocked",
-    CALENDAR_UNVERIFIED: "Calendar is not verified (sync failed or stale)",
-  };
-  return reasons[reason] || reason;
 }

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { isValidYmd } from "./dates";
 import { maltaYmd } from "./time";
-import { ensureFreshCalendars, getAvailability, findAlternatives } from "./availability";
+import { ensureFreshCalendars, getAvailability, findAlternatives, getAvailabilityFresh } from "./availability";
 import { prisma } from "./db";
 
 export type TurnContext = {
@@ -112,6 +112,35 @@ const SAVE_LEAD_DETAILS = {
   },
 };
 
+const HANDOFF_TO_HOST = {
+  name: "handoff_to_host",
+  description: "Escalate the conversation to the host. Use this for questions the AI cannot answer, payment discussions, special requests, or when unsure.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      reason: {
+        type: "string",
+        description: "Short English reason for the handoff (max 300 characters)",
+      },
+      urgent: {
+        type: "boolean",
+        description: "True only for emergencies or urgent issues",
+      },
+    },
+    required: ["reason"],
+  },
+};
+
+const MARK_DO_NOT_CONTACT = {
+  name: "mark_do_not_contact",
+  description: "Mark the lead as opting out when the guest asks to stop receiving messages.",
+  input_schema: {
+    type: "object" as const,
+    properties: {},
+    required: [],
+  },
+};
+
 const RESPOND = {
   name: "respond",
   description: "Send the reply to the guest and report what happened. This is the last tool call.",
@@ -152,7 +181,7 @@ const RESPOND = {
   },
 };
 
-export const dataTools = [CHECK_AVAILABILITY, GET_APARTMENT_INFO, SAVE_LEAD_DETAILS];
+export const dataTools = [CHECK_AVAILABILITY, GET_APARTMENT_INFO, SAVE_LEAD_DETAILS, HANDOFF_TO_HOST, MARK_DO_NOT_CONTACT];
 export const RESPOND_TOOL = RESPOND;
 
 export async function runTool(
@@ -168,6 +197,12 @@ export async function runTool(
   }
   if (name === "save_lead_details") {
     return await runSaveLeadDetails(input, ctx);
+  }
+  if (name === "handoff_to_host") {
+    return await runHandoffToHost(input, ctx);
+  }
+  if (name === "mark_do_not_contact") {
+    return await runMarkDoNotContact(input, ctx);
   }
   return JSON.stringify({ error: "Unknown tool" });
 }
@@ -188,8 +223,8 @@ async function runCheckAvailability(
   const nights = Math.round(
     (Date.parse(`${check_out}T00:00:00Z`) - Date.parse(`${check_in}T00:00:00Z`)) / 86_400_000,
   );
-  if (nights > 90) {
-    return JSON.stringify({ error: "Maximum stay is 90 nights." });
+  if (nights > 60) {
+    return JSON.stringify({ error: "Maximum stay is 60 nights." });
   }
   if (guests < 1 || guests > 30) {
     return JSON.stringify({ error: "Guests must be between 1 and 30." });
@@ -212,11 +247,8 @@ async function runCheckAvailability(
     apartmentId = apt.id;
   }
 
-  // Sync calendars if stale
-  await ensureFreshCalendars(ctx.ownerId, apartmentId, ctx.now);
-
-  // Get availability
-  const results = await getAvailability(ctx.ownerId, {
+  // Sync calendars if stale and get availability with stale flag
+  const { results, calendarsStale } = await getAvailabilityFresh(ctx.ownerId, {
     checkIn: new Date(check_in),
     checkOut: new Date(check_out),
     guests,
@@ -257,6 +289,7 @@ async function runCheckAvailability(
     });
     return JSON.stringify({
       available: false,
+      calendars_stale: calendarsStale,
       apartments: results.map((r) => ({
         apartment_name: r.name,
         available: r.available,
@@ -286,6 +319,7 @@ async function runCheckAvailability(
 
   return JSON.stringify({
     available: true,
+    calendars_stale: calendarsStale,
     apartments: results.map((r) => ({
       apartment_name: r.name,
       available: r.available,
@@ -372,4 +406,39 @@ async function findApartment(ownerId: string, name: string) {
   if (matches.length === 1) return matches[0];
 
   return null;
+}
+
+async function runHandoffToHost(
+  input: any,
+  ctx: TurnContext,
+): Promise<string> {
+  const { reason, urgent } = input;
+
+  // Save the handoff reason to the lead for later use
+  await prisma.lead.update({
+    where: { id: ctx.leadId },
+    data: {
+      status: "NEEDS_HOST",
+      needsHostReason: reason?.slice(0, 300) || null,
+      urgent: urgent || false,
+      hostSummary: reason?.slice(0, 600) || null,
+    },
+  });
+
+  return JSON.stringify({ success: true, message: "Handed off to host" });
+}
+
+async function runMarkDoNotContact(
+  input: any,
+  ctx: TurnContext,
+): Promise<string> {
+  // Mark the lead as blocked
+  await prisma.lead.update({
+    where: { id: ctx.leadId },
+    data: {
+      blockedAt: new Date(),
+    },
+  });
+
+  return JSON.stringify({ success: true, message: "Marked as do not contact" });
 }

@@ -26,6 +26,7 @@ export const feedSchema = z.object({
 export const settingsSchema = z.object({
   hostLanguage: z.enum(LANGUAGE_CODES),
   defaultGuestLanguage: z.enum(LANGUAGE_CODES),
+  enquiriesEnabled: z.coerce.boolean().optional(),
 });
 
 /** First line of SSRF defence. Phase 3 must ALSO resolve DNS and block private IPs at fetch time. */

@@ -8,6 +8,7 @@ import {
   shiftedWindows,
   type AptInput,
   type AvailabilityResult,
+  CALENDAR_STALE_MS,
 } from "./availability-core";
 
 type Params = {
@@ -79,6 +80,30 @@ export async function ensureFreshCalendars(
   ]);
 }
 
+/** Check if any feed is stale (older than 60 minutes or has errors). */
+export async function calendarsStale(
+  ownerId: string,
+  apartmentId?: string,
+  now = new Date(),
+): Promise<boolean> {
+  const feeds = await prisma.calendarFeed.findMany({
+    where: {
+      apartment: {
+        ownerId,
+        ...(apartmentId ? { id: apartmentId } : {}),
+      },
+    },
+    select: { lastSuccessAt: true, lastError: true },
+  });
+  const staleThreshold = 60 * 60_000; // 60 minutes
+  return feeds.some(
+    (f) =>
+      !!f.lastError ||
+      !f.lastSuccessAt ||
+      now.getTime() - f.lastSuccessAt.getTime() > staleThreshold,
+  );
+}
+
 export async function getAvailability(
   ownerId: string,
   p: Params,
@@ -135,4 +160,16 @@ export async function findAlternatives(ownerId: string, p: Params) {
     )
     .slice(0, 3);
   return { otherApartments: other, shiftedDates: shifted };
+}
+
+/** Like getAvailability, but syncs stale calendars and returns a calendarsStale flag. */
+export async function getAvailabilityFresh(
+  ownerId: string,
+  p: Params,
+): Promise<{ results: AvailabilityResult[]; calendarsStale: boolean }> {
+  const now = p.now ?? new Date();
+  await ensureFreshCalendars(ownerId, p.apartmentId, now);
+  const results = await getAvailability(ownerId, p);
+  const stale = await calendarsStale(ownerId, p.apartmentId, now);
+  return { results, calendarsStale: stale };
 }

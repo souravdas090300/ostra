@@ -3,7 +3,7 @@ import { prisma } from "./db";
 const DAY = 86_400_000;
 
 export async function runRetention(now = new Date(), dryRun = false) {
-  const out = { bookings: 0, messages: 0, scheduled: 0, unmatched: 0, attempts: 0 };
+  const out = { bookings: 0, messages: 0, scheduled: 0, unmatched: 0, attempts: 0, leads: 0, leadMessages: 0 };
 
   const owners = await prisma.owner.findMany({ select: { id: true, retentionDays: true } });
   for (const o of owners) {
@@ -33,6 +33,30 @@ export async function runRetention(now = new Date(), dryRun = false) {
       ]);
       out.messages += m.count;
       out.scheduled += s.count;
+    }
+
+    // Retention for leads: anonymize leads inactive for retention period
+    for (;;) {
+      const batch = await prisma.lead.findMany({
+        where: {
+          ownerId: o.id,
+          lastInboundAt: { lt: cutoff },
+          blockedAt: null,
+          status: { not: "BOOKED" }, // keep converted leads
+        },
+        select: { id: true },
+        take: 500,
+      });
+      if (batch.length === 0) break;
+      const ids = batch.map((l) => l.id);
+      out.leads += ids.length;
+      if (dryRun) break;
+      const lm = await prisma.leadMessage.deleteMany({ where: { leadId: { in: ids } } });
+      await prisma.lead.updateMany({
+        where: { id: { in: ids } },
+        data: { name: null, phone: null, notes: null, checkIn: null, checkOut: null, guests: null, quotedCents: null, needsHostReason: null, hostSummary: null },
+      });
+      out.leadMessages += lm.count;
     }
   }
   if (!dryRun) {

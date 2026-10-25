@@ -5,7 +5,9 @@ import {
   requiredMinNights,
   evaluateApartment,
   shiftedWindows,
+  reasonToText,
   MAX_ENQUIRY_NIGHTS,
+  MAX_FUTURE_DAYS,
   CALENDAR_STALE_MS,
   type AptInput,
   type StayRow,
@@ -327,16 +329,50 @@ describe("evaluateApartment", () => {
     expect(result.reason).toBe("PAST_DATE");
   });
 
-  it("returns TOO_LONG for stays over 90 nights", () => {
+  it("returns TOO_FAR for dates more than 730 days ahead", () => {
+    const result = evaluateApartment(apt, [], {
+      inYmd: "2028-03-15", // should be > 730 days from 2026-03-12
+      outYmd: "2028-03-18",
+      guests: 2,
+      today: "2026-03-12",
+      now,
+    });
+    expect(result.available).toBe(false);
+    expect(result.reason).toBe("TOO_FAR");
+  });
+
+  it("allows dates within 730 days", () => {
+    const result = evaluateApartment(apt, [], {
+      inYmd: "2026-12-31", // should be within 730 days from 2026-03-12
+      outYmd: "2027-01-03",
+      guests: 2,
+      today: "2026-03-12",
+      now,
+    });
+    expect(result.available).toBe(true);
+  });
+
+  it("returns TOO_LONG for stays over 60 nights", () => {
     const result = evaluateApartment(apt, [], {
       inYmd: "2026-03-15",
-      outYmd: "2026-06-20", // ~97 nights
+      outYmd: "2026-05-20", // ~66 nights
       guests: 2,
       today: "2026-03-12",
       now,
     });
     expect(result.available).toBe(false);
     expect(result.reason).toBe("TOO_LONG");
+  });
+
+  it("allows exactly 60 nights", () => {
+    const result = evaluateApartment(apt, [], {
+      inYmd: "2026-03-15",
+      outYmd: "2026-05-14", // 60 nights
+      guests: 2,
+      today: "2026-03-12",
+      now,
+    });
+    expect(result.available).toBe(true);
   });
 
   it("returns TOO_MANY_GUESTS when guests exceed capacity", () => {
@@ -510,6 +546,59 @@ describe("evaluateApartment", () => {
     });
     expect(result.available).toBe(false);
     expect(result.reason).toBe("BOOKED");
+  });
+
+  it("returns NO_PRICE when rate has zero or negative price", () => {
+    const aptWithZeroRate: AptInput = {
+      ...apt,
+      rates: [
+        {
+          startYmd: "2026-03-01",
+          endYmd: "2026-03-31",
+          nightlyCents: 0,
+          minNights: null,
+          createdAt: new Date("2026-01-01"),
+        },
+      ],
+    };
+    const result = evaluateApartment(aptWithZeroRate, [], {
+      inYmd: "2026-03-15",
+      outYmd: "2026-03-18",
+      guests: 2,
+      today: "2026-03-12",
+      now,
+    });
+    expect(result.available).toBe(false);
+    expect(result.reason).toBe("NO_PRICE");
+  });
+
+  it("returns NO_PRICE when base price is zero", () => {
+    const aptWithZeroBase: AptInput = {
+      ...apt,
+      baseNightlyCents: 0,
+    };
+    const result = evaluateApartment(aptWithZeroBase, [], {
+      inYmd: "2026-03-15",
+      outYmd: "2026-03-18",
+      guests: 2,
+      today: "2026-03-12",
+      now,
+    });
+    expect(result.available).toBe(false);
+    expect(result.reason).toBe("NO_PRICE");
+  });
+});
+
+describe("reasonToText", () => {
+  it("returns plain text for each reason", () => {
+    expect(reasonToText("PAST_DATE")).toBe("Date in the past");
+    expect(reasonToText("TOO_FAR")).toBe("Date too far ahead (more than 2 years)");
+    expect(reasonToText("TOO_LONG")).toBe("Stay too long (maximum 60 nights)");
+    expect(reasonToText("TOO_MANY_GUESTS")).toBe("Too many guests for this apartment");
+    expect(reasonToText("MIN_NIGHTS")).toBe("Minimum stay requirement not met");
+    expect(reasonToText("BOOKED")).toBe("Already booked");
+    expect(reasonToText("NO_PRICE")).toBe("Price not set for these dates");
+    expect(reasonToText("CALENDAR_UNVERIFIED")).toBe("Calendar not recently synchronized");
   });
 });
 

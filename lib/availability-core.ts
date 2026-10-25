@@ -1,14 +1,17 @@
 import { addDays, diffDays } from "./dates";
 
-export const MAX_ENQUIRY_NIGHTS = 90;
+export const MAX_ENQUIRY_NIGHTS = 60;
+export const MAX_FUTURE_DAYS = 730;
 export const CALENDAR_STALE_MS = 3 * 3_600_000;
 
 export type Unavailable =
   | "PAST_DATE"
+  | "TOO_FAR"
   | "TOO_LONG"
   | "TOO_MANY_GUESTS"
   | "MIN_NIGHTS"
   | "BOOKED"
+  | "NO_PRICE"
   | "CALENDAR_UNVERIFIED";
 
 export type RateRow = {
@@ -93,6 +96,7 @@ export function evaluateApartment(
   const no = (reason: Unavailable): AvailabilityResult => ({ ...base, available: false, reason });
 
   if (p.inYmd < p.today) return no("PAST_DATE");
+  if (diffDays(p.today, p.inYmd) > MAX_FUTURE_DAYS) return no("TOO_FAR");
   if (nights > MAX_ENQUIRY_NIGHTS) return no("TOO_LONG");
   if (p.guests > apt.maxGuests) return no("TOO_MANY_GUESTS");
   if (nights < minNights) return no("MIN_NIGHTS");
@@ -103,6 +107,7 @@ export function evaluateApartment(
     const date = addDays(p.inYmd, i);
     return { date, cents: nightlyPrice(date, apt.rates, apt.baseNightlyCents) };
   });
+  if (nightly.some((n) => n.cents <= 0)) return no("NO_PRICE");
   const total = nightly.reduce((n, x) => n + x.cents, 0) + apt.cleaningFeeCents;
   return {
     ...base,
@@ -133,4 +138,19 @@ export function shiftedWindows(
     }
   }
   return found;
+}
+
+/** Convert technical reason codes to plain language for the host. */
+export function reasonToText(reason: Unavailable): string {
+  const map: Record<Unavailable, string> = {
+    PAST_DATE: "Date in the past",
+    TOO_FAR: "Date too far ahead (more than 2 years)",
+    TOO_LONG: "Stay too long (maximum 60 nights)",
+    TOO_MANY_GUESTS: "Too many guests for this apartment",
+    MIN_NIGHTS: "Minimum stay requirement not met",
+    BOOKED: "Already booked",
+    NO_PRICE: "Price not set for these dates",
+    CALENDAR_UNVERIFIED: "Calendar not recently synchronized",
+  };
+  return map[reason];
 }
