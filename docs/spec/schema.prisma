@@ -1,0 +1,107 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Owner {
+  id         String      @id @default(cuid())
+  email      String      @unique
+  name       String?
+  createdAt  DateTime    @default(now())
+  apartments Apartment[]
+}
+
+model Apartment {
+  id        String    @id @default(cuid())
+  ownerId   String
+  owner     Owner     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name      String
+  address   String
+  checkInTime  String  @default("15:00")
+  checkOutTime String  @default("11:00")
+  // Free-text knowledge base the AI answers from
+  // (check-in steps, wifi, parking, rules, local tips)
+  info      String    @default("")
+  bookings  Booking[]
+  calendars CalendarFeed[]
+  createdAt DateTime  @default(now())
+}
+
+model CalendarFeed {
+  id          String    @id @default(cuid())
+  apartmentId String
+  apartment   Apartment @relation(fields: [apartmentId], references: [id], onDelete: Cascade)
+  source      Source
+  icalUrl     String
+  lastSyncAt  DateTime?
+  lastError   String?
+}
+
+model Booking {
+  id          String    @id @default(cuid())
+  apartmentId String
+  apartment   Apartment @relation(fields: [apartmentId], references: [id], onDelete: Cascade)
+  source      Source
+  externalUid String?   // iCal UID, used to avoid duplicates on re-sync
+  guestName   String?
+  guestPhone  String?   // WhatsApp number, added manually by the host
+  checkIn     DateTime
+  checkOut    DateTime
+  status      BookingStatus @default(CONFIRMED)
+  messages    Message[]
+  scheduled   ScheduledMessage[]
+  createdAt   DateTime  @default(now())
+
+  @@unique([apartmentId, externalUid])
+  @@index([apartmentId, checkIn])
+}
+
+model Message {
+  id        String    @id @default(cuid())
+  bookingId String
+  booking   Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  direction Direction
+  body      String
+  escalated Boolean   @default(false) // AI was unsure, host needs to reply
+  resolved  Boolean   @default(false)
+  createdAt DateTime  @default(now())
+}
+
+model ScheduledMessage {
+  id        String       @id @default(cuid())
+  bookingId String
+  booking   Booking      @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  type      MessageType
+  sendAt    DateTime
+  sentAt    DateTime?
+
+  @@unique([bookingId, type])
+  @@index([sendAt, sentAt])
+}
+
+enum Source {
+  AIRBNB
+  BOOKING_COM
+  DIRECT
+}
+
+enum BookingStatus {
+  CONFIRMED
+  CANCELLED
+}
+
+enum Direction {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageType {
+  PRE_ARRIVAL
+  CHECK_IN
+  CHECK_OUT
+  REVIEW_REQUEST
+}
