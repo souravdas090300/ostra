@@ -18,6 +18,9 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
+// Need to mock $queryRaw at the module level
+const mockQueryRaw = vi.mocked(prisma.$queryRaw);
+
 vi.mock("@/lib/message-render", () => ({
   buildValues: vi.fn(),
   pickTranslation: vi.fn(),
@@ -66,7 +69,7 @@ describe("send-scheduled", () => {
   it("marks stuck SENDING messages as FAILED", async () => {
     vi.mocked(inAllowedWindow).mockReturnValue(true);
     vi.mocked(prisma.scheduledMessage.updateMany).mockResolvedValue({ count: 1 });
-    vi.mocked(prisma.$queryRaw).mockResolvedValue([]);
+    mockQueryRaw.mockResolvedValue([]);
 
     await sendDueMessages();
 
@@ -85,7 +88,7 @@ describe("send-scheduled", () => {
   it("claims pending messages atomically", async () => {
     vi.mocked(inAllowedWindow).mockReturnValue(true);
     vi.mocked(prisma.scheduledMessage.updateMany).mockResolvedValue({ count: 0 });
-    vi.mocked(prisma.$queryRaw).mockResolvedValue([{ id: "msg1" }]);
+    mockQueryRaw.mockResolvedValue([{ id: "msg1" }]);
     vi.mocked(prisma.scheduledMessage.findUniqueOrThrow).mockResolvedValue({
       id: "msg1",
       bookingId: "booking1",
@@ -196,7 +199,7 @@ describe("send-scheduled", () => {
   it("skips when booking became ineligible", async () => {
     vi.mocked(inAllowedWindow).mockReturnValue(true);
     vi.mocked(prisma.scheduledMessage.updateMany).mockResolvedValue({ count: 0 });
-    vi.mocked(prisma.$queryRaw).mockResolvedValue([{ id: "msg1" }]);
+    mockQueryRaw.mockResolvedValue([{ id: "msg1" }]);
     vi.mocked(prisma.scheduledMessage.findUniqueOrThrow).mockResolvedValue({
       id: "msg1",
       bookingId: "booking1",
@@ -273,7 +276,7 @@ describe("send-scheduled", () => {
   it("skips when past latest useful moment", async () => {
     vi.mocked(inAllowedWindow).mockReturnValue(true);
     vi.mocked(prisma.scheduledMessage.updateMany).mockResolvedValue({ count: 0 });
-    vi.mocked(prisma.$queryRaw).mockResolvedValue([{ id: "msg1" }]);
+    mockQueryRaw.mockResolvedValue([{ id: "msg1" }]);
     vi.mocked(prisma.scheduledMessage.findUniqueOrThrow).mockResolvedValue({
       id: "msg1",
       bookingId: "booking1",
@@ -351,7 +354,7 @@ describe("send-scheduled", () => {
   it("respects daily cap", async () => {
     vi.mocked(inAllowedWindow).mockReturnValue(true);
     vi.mocked(prisma.scheduledMessage.updateMany).mockResolvedValue({ count: 0 });
-    vi.mocked(prisma.$queryRaw).mockResolvedValue([{ id: "msg1" }]);
+    mockQueryRaw.mockResolvedValue([{ id: "msg1" }]);
     vi.mocked(prisma.scheduledMessage.findUniqueOrThrow).mockResolvedValue({
       id: "msg1",
       bookingId: "booking1",
@@ -429,7 +432,7 @@ describe("send-scheduled", () => {
   it("retries transient errors", async () => {
     vi.mocked(inAllowedWindow).mockReturnValue(true);
     vi.mocked(prisma.scheduledMessage.updateMany).mockResolvedValue({ count: 0 });
-    vi.mocked(prisma.$queryRaw).mockResolvedValue([{ id: "msg1" }]);
+    mockQueryRaw.mockResolvedValue([{ id: "msg1" }]);
     vi.mocked(prisma.scheduledMessage.findUniqueOrThrow).mockResolvedValue({
       id: "msg1",
       bookingId: "booking1",
@@ -527,7 +530,7 @@ describe("send-scheduled", () => {
   it("fails permanently for permanent errors", async () => {
     vi.mocked(inAllowedWindow).mockReturnValue(true);
     vi.mocked(prisma.scheduledMessage.updateMany).mockResolvedValue({ count: 0 });
-    vi.mocked(prisma.$queryRaw).mockResolvedValue([{ id: "msg1" }]);
+    mockQueryRaw.mockResolvedValue([{ id: "msg1" }]);
     vi.mocked(prisma.scheduledMessage.findUniqueOrThrow).mockResolvedValue({
       id: "msg1",
       bookingId: "booking1",
