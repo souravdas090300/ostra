@@ -113,7 +113,7 @@ export async function sendReply(
         body,
         language,
         originalBody: saveOriginalBody(original, body),
-        twilioSid: sid,
+        metaMessageId: sid,
         deliveryStatus: sid ? "queued" : "dry-run",
       },
     });
@@ -222,7 +222,7 @@ export async function linkUnmatchedToBooking(unmatchedId: string, bookingId: str
         author: "GUEST",
         body: p.body,
         hasMedia: p.hasMedia,
-        twilioSid: p.twilioSid,
+        metaMessageId: p.metaMessageId,
         createdAt: p.receivedAt,
       },
     });

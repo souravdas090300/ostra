@@ -18,7 +18,7 @@ type MessageTemplate = {
     sourceHash: string;
     editedByHost: boolean;
     approval: string;
-    contentSid: string | null;
+    metaTemplateName: string | null;
     rejectionReason: string | null;
   }[];
 };

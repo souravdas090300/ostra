@@ -30,13 +30,13 @@ export async function processInbound(i: InboundInput, now = new Date()): Promise
   const from = i.from.replace(/^whatsapp:/, "");
   const to = i.to.replace(/^whatsapp:/, "");
   if (!E164.test(from)) return;
-  const owner = await prisma.owner.findUnique({ where: { whatsappFrom: to } });
+  const owner = await prisma.owner.findUnique({ where: { whatsappPhoneNumberId: to } });
   if (!owner) return;
 
   // Idempotent: Twilio can deliver the same message more than once.
-  if (await prisma.message.findUnique({ where: { twilioSid: i.sid } })) return;
-  if (await prisma.leadMessage.findUnique({ where: { twilioSid: i.sid } })) return;
-  if (await prisma.unmatchedMessage.findUnique({ where: { twilioSid: i.sid } })) return;
+  if (await prisma.message.findUnique({ where: { metaMessageId: i.sid } })) return;
+  if (await prisma.leadMessage.findUnique({ where: { metaMessageId: i.sid } })) return;
+  if (await prisma.unmatchedMessage.findUnique({ where: { metaMessageId: i.sid } })) return;
 
   const body = i.body.trim().slice(0, 2000);
   const hasMedia = i.numMedia > 0;
@@ -62,7 +62,7 @@ export async function processInbound(i: InboundInput, now = new Date()): Promise
         author: "GUEST",
         body,
         hasMedia,
-        twilioSid: i.sid,
+        metaMessageId: i.sid,
       },
     });
   } catch (e) {
@@ -238,7 +238,7 @@ async function reply(
         author,
         body: text,
         language,
-        twilioSid: sid,
+        metaMessageId: sid,
         deliveryStatus: sid ? "queued" : "dry-run",
       },
     });
@@ -303,7 +303,7 @@ async function updateLanguage(bookingId: string, current: string | null, text: s
 async function handleUnmatched(ownerId: string, phone: string, sid: string, body: string, hasMedia: boolean, now: Date) {
   try {
     await prisma.unmatchedMessage.create({
-      data: { ownerId, phone, body, hasMedia, twilioSid: sid },
+      data: { ownerId, phone, body, hasMedia, metaMessageId: sid },
     });
   } catch (e) {
     if (isUnique(e)) return;
@@ -322,7 +322,7 @@ async function handleUnmatched(ownerId: string, phone: string, sid: string, body
   if (lastHour > 5 || repliedToday > 0) return; // no AI, one canned reply per number per day
   try {
     await sendWhatsApp({ to: phone, text: UNMATCHED_REPLY });
-    await prisma.unmatchedMessage.update({ where: { twilioSid: sid }, data: { repliedAt: now } });
+    await prisma.unmatchedMessage.update({ where: { metaMessageId: sid }, data: { repliedAt: now } });
   } catch {
     /* nothing to do: the message is stored for the host */
   }

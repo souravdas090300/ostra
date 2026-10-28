@@ -1,0 +1,23 @@
+name: Saturnday AI Governanace
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+    jobs:
+      saturnday-scan:
+        runs-on: ubuntu-latest
+        permissions:
+          contents: read
+          pull-requests: write
+        steps:
+          - name: Checkout code
+            uses: actions/checkout@v4
+            
+            name: Run Saturnday Check
+            uses: honouralexwill/saturnday/.github/actions/satunday-checkout-check@master
+            with:
+              path: '.'
+              fail-on-error: 'true'

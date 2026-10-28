@@ -72,7 +72,7 @@ export async function updateTemplate(formData: FormData) {
         body,
         sourceHash: hashSource(body),
         approval: "NONE",
-        contentSid: null,
+        metaTemplateName: null,
         rejectionReason: null,
       },
     });
@@ -182,7 +182,7 @@ export async function regenerateTranslation(formData: FormData) {
       body: translatedBody,
       sourceHash: hashSource(template.body),
       approval: "NONE",
-      contentSid: null,
+      metaTemplateName: null,
       rejectionReason: null,
     },
   });
@@ -207,7 +207,7 @@ export async function syncApprovals() {
   const pending = await prisma.templateTranslation.findMany({
     where: {
       approval: "PENDING",
-      contentSid: { not: null },
+      metaTemplateName: { not: null },
       template: { ownerId },
     },
   });

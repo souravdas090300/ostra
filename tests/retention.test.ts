@@ -232,7 +232,7 @@ describe("retention", () => {
         ownerId,
         phone: "+35679123456",
         body: "Test",
-        twilioSid: "sid123",
+        metaMessageId: "sid123",
         receivedAt: new Date("2026-01-01"),
       },
     });

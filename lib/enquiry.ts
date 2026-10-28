@@ -59,7 +59,7 @@ export async function handleEnquiry(i: InboundInput, now = new Date()): Promise<
       author: "GUEST",
       body,
       hasMedia,
-      twilioSid: i.sid,
+      metaMessageId: i.sid,
     },
   });
 
@@ -284,7 +284,7 @@ async function reply(
         author,
         body: text,
         language,
-        twilioSid: sid,
+        metaMessageId: sid,
         deliveryStatus: sid ? "queued" : "dry-run",
       },
     });
