@@ -247,16 +247,30 @@ describe("review-draft", () => {
   describe("euro amount blocking", () => {
     it("should block drafts with euro amounts", () => {
       const draft = "Thank you for your stay. Here is €50 refund.";
-      const hasEuro = /[€₤]\s*\d/.test(draft) || /\d+\s*(€|eur|euro)/i.test(draft);
+      const hasEuro = /(?:^|\s)[€₤]\s*\d/.test(draft) || /\d+\s*(?:€|eur|euro)(?:\s|\.|,|$)/i.test(draft);
 
       expect(hasEuro).toBe(true);
     });
 
     it("should block drafts with EUR amounts", () => {
       const draft = "Thank you for your stay. Here is 50 EUR refund.";
-      const hasEuro = /[€₤]\s*\d/.test(draft) || /\d+\s*(€|eur|euro)/i.test(draft);
+      const hasEuro = /(?:^|\s)[€₤]\s*\d/.test(draft) || /\d+\s*(?:€|eur|euro)(?:\s|\.|,|$)/i.test(draft);
 
       expect(hasEuro).toBe(true);
+    });
+
+    it("should not false positive on words like curiosity", () => {
+      const draft = "We appreciate your curiosity about our amenities.";
+      const hasEuro = /(?:^|\s)[€₤]\s*\d/.test(draft) || /\d+\s*(?:€|eur|euro)(?:\s|\.|,|$)/i.test(draft);
+
+      expect(hasEuro).toBe(false);
+    });
+
+    it("should not false positive on words with euro in middle", () => {
+      const draft = "The European Parliament is nearby.";
+      const hasEuro = /(?:^|\s)[€₤]\s*\d/.test(draft) || /\d+\s*(?:€|eur|euro)(?:\s|\.|,|$)/i.test(draft);
+
+      expect(hasEuro).toBe(false);
     });
   });
 
