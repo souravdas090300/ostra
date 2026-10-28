@@ -17,7 +17,7 @@ model Owner {
   hostLanguage        String      @default("en")
   defaultGuestLanguage String     @default("en")
   fallbackLanguage    String      @default("en")
-  whatsappFrom        String?    @unique
+  whatsappPhoneNumberId String?    @unique
   retentionDays       Int         @default(90)
   passwordChangedAt   DateTime?
   monthlyAiBudgetCents Int        @default(1500)
@@ -131,7 +131,7 @@ model Message {
   escalationReason    String?
   urgent              Boolean  @default(false)
   hasMedia            Boolean  @default(false)
-  twilioSid           String?  @unique
+  metaMessageId       String?  @unique
   deliveryStatus      String?  // queued | sent | delivered | read | failed | undelivered | dry-run
   errorCode           Int?
   scheduledMessageId  String?  @unique
@@ -160,7 +160,7 @@ model ScheduledMessage {
   lastError       String?
   skipReason      String?
   hostSkipped     Boolean  @default(false)
-  twilioSid       String?
+  metaMessageId   String?
   language        String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -207,7 +207,7 @@ model UnmatchedMessage {
   phone      String
   body       String
   hasMedia   Boolean  @default(false)
-  twilioSid  String   @unique
+  metaMessageId  String   @unique
   receivedAt DateTime @default(now())
   repliedAt  DateTime?
   handledAt  DateTime?
