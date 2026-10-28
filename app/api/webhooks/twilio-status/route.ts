@@ -41,7 +41,7 @@ export async function POST(req: Request) {
     status = params.MessageStatus;
   if (!sid || !status) return new NextResponse(null, { status: 200 });
 
-  const msg = await prisma.message.findUnique({ where: { twilioSid: sid } });
+  const msg = await prisma.message.findUnique({ where: { metaMessageId: sid } });
   if (
     msg &&
     (RANK[status] ?? 0) >= (RANK[msg.deliveryStatus ?? ""] ?? 0)

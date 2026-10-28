@@ -100,10 +100,10 @@ describe("message-render", () => {
 
   describe("pickTranslation", () => {
     const translations = [
-      { language: "en", body: "Hello", approval: "APPROVED", contentSid: "HX123" },
-      { language: "de", body: "Hallo", approval: "APPROVED", contentSid: "HX124" },
-      { language: "fr", body: "Bonjour", approval: "NONE", contentSid: null },
-      { language: "it", body: "Ciao", approval: "PENDING", contentSid: "HX125" },
+      { language: "en", body: "Hello", approval: "APPROVED", metaTemplateName: "HX123" },
+      { language: "de", body: "Hallo", approval: "APPROVED", metaTemplateName: "HX124" },
+      { language: "fr", body: "Bonjour", approval: "NONE", metaTemplateName: null },
+      { language: "it", body: "Ciao", approval: "PENDING", metaTemplateName: "HX125" },
     ];
 
     it("picks guest language when approved in production", () => {
@@ -143,9 +143,9 @@ describe("message-render", () => {
       expect(result).toBeNull();
     });
 
-    it("requires contentSid for production approval", () => {
+    it("requires metaTemplateName for production approval", () => {
       const noSid = [
-        { language: "en", body: "Hello", approval: "APPROVED", contentSid: null },
+        { language: "en", body: "Hello", approval: "APPROVED", metaTemplateName: null },
       ];
       const result = pickTranslation(noSid, "en", "de", "production");
       expect(result).toBeNull();

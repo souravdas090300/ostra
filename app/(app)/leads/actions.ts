@@ -112,7 +112,7 @@ export async function sendLeadReply(
         body,
         originalBody: saveOriginalBody(original, body),
         language: lead.language ?? session.defaultGuestLanguage,
-        twilioSid: sid,
+        metaMessageId: sid,
         deliveryStatus: sid ? "queued" : "dry-run",
       },
     });

@@ -72,7 +72,7 @@ export async function submitTranslation(translationId: string, ownerId: string):
     await prisma.templateTranslation.update({
       where: { id: translationId },
       data: {
-        contentSid: content.sid,
+        metaTemplateName: content.sid,
         approval: "PENDING",
       },
     });
@@ -94,16 +94,16 @@ export async function submitTranslation(translationId: string, ownerId: string):
 
 export async function syncApprovals(): Promise<void> {
   const pending = await prisma.templateTranslation.findMany({
-    where: { approval: "PENDING", contentSid: { not: null } },
+    where: { approval: "PENDING", metaTemplateName: { not: null } },
     include: { template: true },
   });
 
   for (const t of pending) {
     try {
-      if (!t.contentSid) continue;
+      if (!t.metaTemplateName) continue;
 
       const client = getClient() as unknown as { content: (sid: string) => { fetch: () => Promise<{ whatsapp?: { approvalStatus?: string; rejectionReason?: string } }> } };
-      const content = await client.content(t.contentSid).fetch();
+      const content = await client.content(t.metaTemplateName).fetch();
 
       let newApproval = t.approval;
       let rejectionReason = t.rejectionReason;
@@ -157,7 +157,7 @@ export async function updateTranslationText(
     where: { id: translationId },
     data: {
       body: newBody,
-      contentSid: null,
+      metaTemplateName: null,
       approval: "NONE",
       rejectionReason: null,
     },

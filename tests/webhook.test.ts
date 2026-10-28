@@ -75,7 +75,7 @@ describe("twilio-status webhook", () => {
     vi.mocked(prisma.message.findUnique).mockResolvedValue({
       id: "msg1",
       bookingId: "booking1",
-      twilioSid: "SM123",
+      metaMessageId: "SM123",
       createdAt: new Date(),
       direction: "OUTBOUND",
       body: "Test",
@@ -100,7 +100,7 @@ describe("twilio-status webhook", () => {
     vi.mocked(prisma.message.update).mockResolvedValue({
       id: "msg1",
       bookingId: "booking1",
-      twilioSid: "SM123",
+      metaMessageId: "SM123",
       createdAt: new Date(),
       direction: "OUTBOUND",
       body: "Test",
@@ -149,7 +149,7 @@ describe("twilio-status webhook", () => {
     vi.mocked(prisma.message.findUnique).mockResolvedValue({
       id: "msg1",
       bookingId: "booking1",
-      twilioSid: "SM123",
+      metaMessageId: "SM123",
       createdAt: new Date(),
       direction: "OUTBOUND",
       body: "Test",
@@ -192,7 +192,7 @@ describe("twilio-status webhook", () => {
     vi.mocked(prisma.message.findUnique).mockResolvedValue({
       id: "msg1",
       bookingId: "booking1",
-      twilioSid: "SM123",
+      metaMessageId: "SM123",
       createdAt: new Date(),
       direction: "OUTBOUND",
       body: "Test",
@@ -217,7 +217,7 @@ describe("twilio-status webhook", () => {
     vi.mocked(prisma.message.update).mockResolvedValue({
       id: "msg1",
       bookingId: "booking1",
-      twilioSid: "SM123",
+      metaMessageId: "SM123",
       createdAt: new Date(),
       direction: "OUTBOUND",
       body: "Test",

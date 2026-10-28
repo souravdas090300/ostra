@@ -48,7 +48,7 @@ describe("schedule", () => {
         sourceHash: "abc123",
         editedByHost: false,
         approval: "NONE",
-        contentSid: null,
+        metaTemplateName: null,
         rejectionReason: null,
         updatedAt: new Date(),
       });
@@ -110,7 +110,7 @@ describe("schedule", () => {
         sourceHash: "abc123",
         editedByHost: false,
         approval: "NONE",
-        contentSid: null,
+        metaTemplateName: null,
         rejectionReason: null,
         updatedAt: new Date(),
       });
