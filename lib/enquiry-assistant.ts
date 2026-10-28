@@ -133,6 +133,29 @@ export async function answerEnquiry(input: EnquiryInput): Promise<EnquiryOutput>
   const model = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5-5";
   const system = buildEnquiryPrompt(input);
 
+  // Kill switch check
+  if (!assistantEnabled()) {
+    return fallbackOutput(
+      normaliseLanguage(input.knownLanguage),
+      "AI assistant disabled",
+      "A guest message needs your attention.",
+    );
+  }
+
+  // Budget check before AI call
+  try {
+    await assertAiBudget(input.ctx.ownerId, new Date());
+  } catch (e) {
+    if (e instanceof BudgetExceededError) {
+      return fallbackOutput(
+        normaliseLanguage(input.knownLanguage),
+        "Monthly AI budget exceeded",
+        "A guest message needs your attention.",
+      );
+    }
+    throw e;
+  }
+
   for (let call = 0; call < 4; call++) {
     const forced = call === 3; // the last call must be respond
     const tools = forced ? [RESPOND_TOOL] : [...dataTools, RESPOND_TOOL];
@@ -202,6 +225,10 @@ export async function answerEnquiry(input: EnquiryInput): Promise<EnquiryOutput>
         );
       }
       if (out.urgent) out.escalate = true;
+      
+      // Record usage after successful AI call
+      await recordUsage(input.ctx.ownerId, "AI_ENQUIRY", usage);
+      
       return out;
     }
 
