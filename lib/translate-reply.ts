@@ -48,7 +48,8 @@ export async function translateText(text: string, from: string, to: string, owne
 
 /** Tokens that contain a digit or are links (times, prices, codes, passwords) and must survive translation. */
 export function missingTokens(original: string, translated: string): string[] {
-  const raw = original.match(/https?:\/\/\S+|\S*\d\S*/g) ?? [];
+  // Simplified regex to avoid catastrophic backtracking: match URLs or tokens with digits
+  const raw = original.match(/https?:\/\/[^\s]+|[^\s]*\d[^\s]*/g) ?? [];
   const tokens = [...new Set(raw.map((t) => t.replace(/[.,;:!?)\]]+$/, "").replace(/^[([]+/, "")).filter(Boolean))];
   return tokens.filter((t) => !translated.includes(t));
 }
