@@ -10,6 +10,21 @@ jobs:
   check:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ostra
+          POSTGRES_PASSWORD: ostra_test_password
+          POSTGRES_DB: ostra_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - uses: actions/checkout@v4
 
@@ -27,8 +42,30 @@ jobs:
       - name: Run typecheck
         run: npm run typecheck
 
+      - name: Generate Prisma Client
+        run: npx prisma generate
+        env:
+          DATABASE_URL: postgresql://ostra:ostra_test_password@localhost:5432/ostra_test
+
+      - name: Run database migrations
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://ostra:ostra_test_password@localhost:5432/ostra_test
+
       - name: Run tests
         run: npm run test
+        env:
+          DATABASE_URL: postgresql://ostra:ostra_test_password@localhost:5432/ostra_test
 
       - name: Build
         run: npm run build
+
+      - name: Run npm audit (Phase 9 security check)
+        run: npm audit --audit-level=moderate
+
+      - name: Check for secrets in code (Phase 9 security check)
+        run: |
+          if git grep -i "password\|secret\|token\|api_key" -- ':!*.md' ':!*.test.ts' ':!*.test.tsx' ':!vitest.config.ts' ':!.env*' ':!prisma/schema.prisma' | grep -v "process.env"; then
+            echo "Potential secrets found in code"
+            exit 1
+          fi || true
