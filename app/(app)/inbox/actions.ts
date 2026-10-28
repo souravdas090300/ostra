@@ -34,8 +34,8 @@ export async function previewReply(bookingId: string, text: string): Promise<Pre
   if (guestLanguage === session.hostLanguage) return { ok: true, sameLanguage: true, guestLanguage };
   if (!rateLimit(`translate:${session.id}`, 60, 3_600_000)) return { error: "Too many translations this hour. Try again later." };
   try {
-    const translation = await translateText(clean, session.hostLanguage, guestLanguage);
-    const backTranslation = await translateText(translation, guestLanguage, session.hostLanguage);
+    const translation = await translateText(clean, session.hostLanguage, guestLanguage, session.id);
+    const backTranslation = await translateText(translation, guestLanguage, session.hostLanguage, session.id);
     const missing = missingTokens(clean, translation);
     return {
       ok: true,
@@ -55,7 +55,7 @@ export async function recheckTranslation(bookingId: string, edited: string, orig
   const guestLanguage = resolveGuestLanguage(t.booking.guestLanguage, t.lastDetected, session.defaultGuestLanguage);
   if (!rateLimit(`translate:${session.id}`, 60, 3_600_000)) return { error: "Too many translations this hour. Try again later." };
   try {
-    const backTranslation = await translateText(edited.slice(0, MAX_TEXT), guestLanguage, session.hostLanguage);
+    const backTranslation = await translateText(edited.slice(0, MAX_TEXT), guestLanguage, session.hostLanguage, session.id);
     const missing = missingTokens(original, edited);
     return {
       ok: true,
