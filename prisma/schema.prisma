@@ -193,6 +193,9 @@ model TemplateTranslation {
   editedByHost    Boolean         @default(false)
   approval        String          @default("NONE") // NONE, PENDING, APPROVED, REJECTED
   contentSid      String?         // Twilio Content SID (HX...)
+  metaTemplateName String?       // Meta template name
+  metaTemplateId  String?        // Meta template ID
+  metaCategory    String?        // Meta template category
   rejectionReason String?
   updatedAt       DateTime        @updatedAt
 
@@ -345,7 +348,7 @@ model LeadMessage {
   originalBody     String?   // the host's own-language text when the sent text is a translation
   language         String?
   hasMedia         Boolean   @default(false)
-  twilioSid        String?   @unique
+  metaMessageId        String?   @unique
   deliveryStatus   String?
   errorCode        Int?
   escalated        Boolean   @default(false)

@@ -146,9 +146,9 @@ async function sendOne(id: string, now: Date, s: SendSummary) {
     const { sid } = await sendWhatsApp({
       to: b.guestPhone!,
       text,
-      template: picked.translation.contentSid
+      template: picked.translation.metaTemplateName
         ? {
-            name: `${row.type.toLowerCase()}_${picked.translation.language}`,
+            name: picked.translation.metaTemplateName,
             languageCode: picked.translation.language,
             components,
           }
@@ -162,7 +162,7 @@ async function sendOne(id: string, now: Date, s: SendSummary) {
         data: {
           status: "SENT",
           sentAt: now,
-          twilioSid: sid,
+          metaMessageId: sid,
           language: picked.translation.language,
           lastError: null,
         },
@@ -174,7 +174,7 @@ async function sendOne(id: string, now: Date, s: SendSummary) {
           author: "SYSTEM",
           body: text,
           scheduledMessageId: id,
-          twilioSid: sid,
+          metaMessageId: sid,
           deliveryStatus: sid ? "queued" : "dry-run",
         },
       }),
