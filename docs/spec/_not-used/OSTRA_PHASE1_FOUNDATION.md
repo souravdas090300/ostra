@@ -122,7 +122,7 @@ import { authConfig } from "./auth.config";
 import { prisma } from "./db";
 
 // Compared against when the email is unknown, so timing does not reveal which emails exist.
-const DUMMY_HASH = "$2a$12$C6UzMDM.H6dfI/f/IKcEeO5f2hQK8m1k6uQe1gQ1qk2c5e1o9o9Xq";
+const DUMMY_HASH = "$2a$12$C6UzMDM.H6dfI/f/IKcEeO5f2hQK8m1k6uQe1gQ1qk2c5e1o9o9Xq"; // nosemgrep: generic.secrets.security.detected-bcrypt-hash.detected-bcrypt-hash
 
 const credentialsSchema = z.object({ email: z.string().email().max(200), password: z.string().min(1).max(200) });
 
