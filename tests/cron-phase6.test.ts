@@ -2,6 +2,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { POST as SendScheduledPOST } from "@/app/api/cron/send-scheduled/route";
 import { POST as SyncTemplatesPOST } from "@/app/api/cron/sync-templates/route";
 
+const { cronAuthorizedMock } = vi.hoisted(() => ({
+  cronAuthorizedMock: vi.fn(),
+}));
+
 // Mock dependencies
 vi.mock("@/lib/send-scheduled", () => ({
   sendDueMessages: vi.fn(),
@@ -12,7 +16,10 @@ vi.mock("@/lib/template-approval", () => ({
 }));
 
 vi.mock("@/lib/cron-auth", () => ({
-  cronAuthorized: vi.fn(),
+  cronAuthorized: cronAuthorizedMock,
+  requireCronAuth: vi.fn((req: Request) =>
+    cronAuthorizedMock(req) ? null : new Response("Unauthorized", { status: 401 }),
+  ),
 }));
 
 import { sendDueMessages } from "@/lib/send-scheduled";

@@ -6,6 +6,7 @@ export default defineConfig(({ mode }) => ({
   test: {
     globals: true,
     environment: "node",
+    fileParallelism: false,
     env: loadEnv("test", process.cwd(), ""),
   },
   resolve: {

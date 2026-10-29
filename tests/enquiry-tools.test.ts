@@ -3,7 +3,12 @@ import { runTool, dataTools, RESPOND_TOOL } from "@/lib/enquiry-tools";
 import { prisma } from "@/lib/db";
 import { getAvailability, findAlternatives, ensureFreshCalendars, getAvailabilityFresh } from "@/lib/availability";
 
-vi.mock("@/lib/db");
+vi.mock("@/lib/db", () => ({
+  prisma: {
+    apartment: { findFirst: vi.fn(), findMany: vi.fn() },
+    lead: { update: vi.fn() },
+  },
+}));
 vi.mock("@/lib/availability");
 
 describe("E2 - Enquiry Tool Runner", () => {

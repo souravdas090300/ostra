@@ -273,7 +273,7 @@ async function shortenDraft(text: string, maxChars: number, hostLanguage: string
   }
 }
 
-function truncateAtSentence(text: string, maxChars: number): string {
+export function truncateAtSentence(text: string, maxChars: number): string {
   if (text.length <= maxChars) return text;
   
   const truncated = text.slice(0, maxChars);
