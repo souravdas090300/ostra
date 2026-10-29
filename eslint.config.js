@@ -10,6 +10,9 @@ const compat = new FlatCompat({
 });
 
 const eslintConfig = [
+  {
+    ignores: [".next/**", "out/**", "build/**", "next-env.d.ts"],
+  },
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   {
     rules: {
@@ -18,6 +21,19 @@ const eslintConfig = [
   },
   {
     files: ["lib/log.ts", "scripts/**/*"],
+    rules: {
+      "no-console": "off",
+    },
+  },
+  {
+    files: ["tests/**/*"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+      "no-console": "off",
+    },
+  },
+  {
+    files: ["prisma/seed.ts"],
     rules: {
       "no-console": "off",
     },

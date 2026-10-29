@@ -29,7 +29,7 @@ export function buildValues(
   };
 }
 
-type Tr = { language: string; body: string; approval: string; contentSid: string | null };
+type Tr = { language: string; body: string; approval: string; metaTemplateName: string | null };
 
 /** Guest language first, then the owner's fallback. In production only approved translations count. */
 export function pickTranslation(
@@ -41,8 +41,8 @@ export function pickTranslation(
   for (const lang of [guestLanguage, fallbackLanguage]) {
     const t = translations.find((x) => x.language === lang);
     if (!t) continue;
-    // In production, require approval and contentSid
-    if (mode === "production" && !(t.approval === "APPROVED" && t.contentSid)) continue;
+    // In production, require approval and metaTemplateName
+    if (mode === "production" && !(t.approval === "APPROVED" && t.metaTemplateName)) continue;
     // In dry-run/sandbox, any translation is fine
     return { translation: t, usedFallback: lang !== guestLanguage };
   }

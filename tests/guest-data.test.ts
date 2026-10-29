@@ -97,7 +97,7 @@ describe("guest-data", () => {
         ownerId,
         phone,
         body: "Unmatched",
-        twilioSid: "sid123",
+        metaMessageId: "sid123",
         receivedAt: new Date(),
         linkedBookingId: bookingId,
       },

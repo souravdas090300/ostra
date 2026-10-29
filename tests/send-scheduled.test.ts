@@ -1,12 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { sendDueMessages } from "@/lib/send-scheduled";
+import { monthlyCount } from "@/lib/usage";
+
+const { mockQueryRaw } = vi.hoisted(() => ({
+  mockQueryRaw: vi.fn(),
+}));
 
 // Mock dependencies
 vi.mock("@/lib/db", () => ({
   prisma: {
+    $queryRaw: mockQueryRaw,
     scheduledMessage: {
       updateMany: vi.fn(),
-      $queryRaw: vi.fn(),
       findUniqueOrThrow: vi.fn(),
       update: vi.fn(),
       count: vi.fn(),
@@ -30,7 +35,7 @@ vi.mock("@/lib/send-time", () => ({
 }));
 
 vi.mock("@/lib/templates", () => ({
-  toTwilioBody: vi.fn(),
+  toMetaBody: vi.fn(),
 }));
 
 vi.mock("@/lib/whatsapp", () => ({
@@ -43,15 +48,22 @@ vi.mock("@/lib/whatsapp", () => ({
   },
 }));
 
+vi.mock("@/lib/usage", () => ({
+  monthlyCount: vi.fn(),
+}));
+
 import { prisma } from "@/lib/db";
 import { buildValues, pickTranslation, renderText } from "@/lib/message-render";
 import { inAllowedWindow, latestUseful } from "@/lib/send-time";
-import { toTwilioBody } from "@/lib/templates";
+import { toMetaBody } from "@/lib/templates";
 import { sendWhatsApp, whatsappMode, WhatsAppError } from "@/lib/whatsapp";
 
 describe("send-scheduled", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(latestUseful).mockReturnValue(new Date("2099-01-01T00:00:00Z"));
+    vi.mocked(monthlyCount).mockResolvedValue(0);
+    vi.mocked(prisma.scheduledMessage.count).mockResolvedValue(0);
   });
 
   it("does nothing outside allowed window", async () => {
@@ -60,13 +72,14 @@ describe("send-scheduled", () => {
     const summary = await sendDueMessages();
 
     expect(summary).toEqual({ claimed: 0, sent: 0, skipped: 0, failed: 0, retried: 0 });
-    expect(prisma.scheduledMessage.updateMany).not.toHaveBeenCalled();
+    expect(prisma.scheduledMessage.updateMany).toHaveBeenCalledTimes(1);
+    expect(mockQueryRaw).not.toHaveBeenCalled();
   });
 
   it("marks stuck SENDING messages as FAILED", async () => {
     vi.mocked(inAllowedWindow).mockReturnValue(true);
     vi.mocked(prisma.scheduledMessage.updateMany).mockResolvedValue({ count: 1 });
-    vi.mocked(prisma.$queryRaw).mockResolvedValue([]);
+    mockQueryRaw.mockResolvedValue([]);
 
     await sendDueMessages();
 
@@ -85,7 +98,7 @@ describe("send-scheduled", () => {
   it("claims pending messages atomically", async () => {
     vi.mocked(inAllowedWindow).mockReturnValue(true);
     vi.mocked(prisma.scheduledMessage.updateMany).mockResolvedValue({ count: 0 });
-    vi.mocked(prisma.$queryRaw).mockResolvedValue([{ id: "msg1" }]);
+    mockQueryRaw.mockResolvedValue([{ id: "msg1" }]);
     vi.mocked(prisma.scheduledMessage.findUniqueOrThrow).mockResolvedValue({
       id: "msg1",
       bookingId: "booking1",
@@ -98,7 +111,7 @@ describe("send-scheduled", () => {
       lastError: null,
       skipReason: null,
       hostSkipped: false,
-      twilioSid: null,
+      metaMessageId: null,
       language: null,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -135,7 +148,7 @@ describe("send-scheduled", () => {
                     language: "en",
                     body: "Hello {{guestName}}",
                     approval: "APPROVED",
-                    contentSid: "HX123",
+                    metaTemplateName: "HX123",
                     sourceHash: "abc",
                     editedByHost: false,
                     rejectionReason: null,
@@ -153,7 +166,7 @@ describe("send-scheduled", () => {
         language: "en",
         body: "Hello {{guestName}}",
         approval: "APPROVED",
-        contentSid: "HX123",
+        metaTemplateName: "HX123",
       },
       usedFallback: false,
     });
@@ -162,7 +175,7 @@ describe("send-scheduled", () => {
       apartmentName: "Seaview",
     });
     vi.mocked(renderText).mockReturnValue("Hello Anna");
-    vi.mocked(toTwilioBody).mockReturnValue({
+    vi.mocked(toMetaBody).mockReturnValue({
       body: "Hello {{1}}",
       order: ["guestName"],
     });
@@ -181,7 +194,7 @@ describe("send-scheduled", () => {
       lastError: null,
       skipReason: null,
       hostSkipped: false,
-      twilioSid: "SM123",
+      metaMessageId: "SM123",
       language: "en",
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -196,7 +209,7 @@ describe("send-scheduled", () => {
   it("skips when booking became ineligible", async () => {
     vi.mocked(inAllowedWindow).mockReturnValue(true);
     vi.mocked(prisma.scheduledMessage.updateMany).mockResolvedValue({ count: 0 });
-    vi.mocked(prisma.$queryRaw).mockResolvedValue([{ id: "msg1" }]);
+    mockQueryRaw.mockResolvedValue([{ id: "msg1" }]);
     vi.mocked(prisma.scheduledMessage.findUniqueOrThrow).mockResolvedValue({
       id: "msg1",
       bookingId: "booking1",
@@ -209,7 +222,7 @@ describe("send-scheduled", () => {
       lastError: null,
       skipReason: null,
       hostSkipped: false,
-      twilioSid: null,
+      metaMessageId: null,
       language: null,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -235,7 +248,7 @@ describe("send-scheduled", () => {
             id: "owner1",
             fallbackLanguage: "en",
             defaultGuestLanguage: "en",
-            templates: [],
+            templates: [{ type: "PRE_ARRIVAL", enabled: true, translations: [] }],
           },
         },
       },
@@ -252,7 +265,7 @@ describe("send-scheduled", () => {
       lastError: null,
       skipReason: null,
       hostSkipped: false,
-      twilioSid: null,
+      metaMessageId: null,
       language: null,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -273,7 +286,7 @@ describe("send-scheduled", () => {
   it("skips when past latest useful moment", async () => {
     vi.mocked(inAllowedWindow).mockReturnValue(true);
     vi.mocked(prisma.scheduledMessage.updateMany).mockResolvedValue({ count: 0 });
-    vi.mocked(prisma.$queryRaw).mockResolvedValue([{ id: "msg1" }]);
+    mockQueryRaw.mockResolvedValue([{ id: "msg1" }]);
     vi.mocked(prisma.scheduledMessage.findUniqueOrThrow).mockResolvedValue({
       id: "msg1",
       bookingId: "booking1",
@@ -286,7 +299,7 @@ describe("send-scheduled", () => {
       lastError: null,
       skipReason: null,
       hostSkipped: false,
-      twilioSid: null,
+      metaMessageId: null,
       language: null,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -312,7 +325,7 @@ describe("send-scheduled", () => {
             id: "owner1",
             fallbackLanguage: "en",
             defaultGuestLanguage: "en",
-            templates: [],
+            templates: [{ type: "PRE_ARRIVAL", enabled: true, translations: [] }],
           },
         },
       },
@@ -330,7 +343,7 @@ describe("send-scheduled", () => {
       lastError: null,
       skipReason: "Too late to send this message.",
       hostSkipped: false,
-      twilioSid: null,
+      metaMessageId: null,
       language: null,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -351,7 +364,7 @@ describe("send-scheduled", () => {
   it("respects daily cap", async () => {
     vi.mocked(inAllowedWindow).mockReturnValue(true);
     vi.mocked(prisma.scheduledMessage.updateMany).mockResolvedValue({ count: 0 });
-    vi.mocked(prisma.$queryRaw).mockResolvedValue([{ id: "msg1" }]);
+    mockQueryRaw.mockResolvedValue([{ id: "msg1" }]);
     vi.mocked(prisma.scheduledMessage.findUniqueOrThrow).mockResolvedValue({
       id: "msg1",
       bookingId: "booking1",
@@ -364,7 +377,7 @@ describe("send-scheduled", () => {
       lastError: null,
       skipReason: null,
       hostSkipped: false,
-      twilioSid: null,
+      metaMessageId: null,
       language: null,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -390,12 +403,14 @@ describe("send-scheduled", () => {
             id: "owner1",
             fallbackLanguage: "en",
             defaultGuestLanguage: "en",
-            templates: [],
+            templates: [{ type: "PRE_ARRIVAL", enabled: true, translations: [] }],
           },
         },
       },
     } as any);
-    vi.mocked(prisma.scheduledMessage.count).mockResolvedValue(100); // At cap
+    vi.mocked(prisma.scheduledMessage.count).mockResolvedValue(
+      Number(process.env.MAX_TEMPLATE_SENDS_PER_DAY ?? 100),
+    );
     vi.mocked(prisma.scheduledMessage.update).mockResolvedValue({
       id: "msg1",
       bookingId: "booking1",
@@ -408,7 +423,7 @@ describe("send-scheduled", () => {
       lastError: null,
       skipReason: null,
       hostSkipped: false,
-      twilioSid: null,
+      metaMessageId: null,
       language: null,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -429,7 +444,7 @@ describe("send-scheduled", () => {
   it("retries transient errors", async () => {
     vi.mocked(inAllowedWindow).mockReturnValue(true);
     vi.mocked(prisma.scheduledMessage.updateMany).mockResolvedValue({ count: 0 });
-    vi.mocked(prisma.$queryRaw).mockResolvedValue([{ id: "msg1" }]);
+    mockQueryRaw.mockResolvedValue([{ id: "msg1" }]);
     vi.mocked(prisma.scheduledMessage.findUniqueOrThrow).mockResolvedValue({
       id: "msg1",
       bookingId: "booking1",
@@ -442,7 +457,7 @@ describe("send-scheduled", () => {
       lastError: null,
       skipReason: null,
       hostSkipped: false,
-      twilioSid: null,
+      metaMessageId: null,
       language: null,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -468,7 +483,7 @@ describe("send-scheduled", () => {
             id: "owner1",
             fallbackLanguage: "en",
             defaultGuestLanguage: "en",
-            templates: [],
+            templates: [{ type: "PRE_ARRIVAL", enabled: true, translations: [] }],
           },
         },
       },
@@ -478,13 +493,13 @@ describe("send-scheduled", () => {
         language: "en",
         body: "Hello {{guestName}}",
         approval: "APPROVED",
-        contentSid: "HX123",
+        metaTemplateName: "HX123",
       },
       usedFallback: false,
     });
     vi.mocked(buildValues).mockReturnValue({ guestName: "Anna" });
     vi.mocked(renderText).mockReturnValue("Hello Anna");
-    vi.mocked(toTwilioBody).mockReturnValue({
+    vi.mocked(toMetaBody).mockReturnValue({
       body: "Hello {{1}}",
       order: ["guestName"],
     });
@@ -504,7 +519,7 @@ describe("send-scheduled", () => {
       lastError: "Temporary problem sending",
       skipReason: null,
       hostSkipped: false,
-      twilioSid: null,
+      metaMessageId: null,
       language: null,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -527,7 +542,7 @@ describe("send-scheduled", () => {
   it("fails permanently for permanent errors", async () => {
     vi.mocked(inAllowedWindow).mockReturnValue(true);
     vi.mocked(prisma.scheduledMessage.updateMany).mockResolvedValue({ count: 0 });
-    vi.mocked(prisma.$queryRaw).mockResolvedValue([{ id: "msg1" }]);
+    mockQueryRaw.mockResolvedValue([{ id: "msg1" }]);
     vi.mocked(prisma.scheduledMessage.findUniqueOrThrow).mockResolvedValue({
       id: "msg1",
       bookingId: "booking1",
@@ -540,7 +555,7 @@ describe("send-scheduled", () => {
       lastError: null,
       skipReason: null,
       hostSkipped: false,
-      twilioSid: null,
+      metaMessageId: null,
       language: null,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -566,7 +581,7 @@ describe("send-scheduled", () => {
             id: "owner1",
             fallbackLanguage: "en",
             defaultGuestLanguage: "en",
-            templates: [],
+            templates: [{ type: "PRE_ARRIVAL", enabled: true, translations: [] }],
           },
         },
       },
@@ -576,13 +591,13 @@ describe("send-scheduled", () => {
         language: "en",
         body: "Hello {{guestName}}",
         approval: "APPROVED",
-        contentSid: "HX123",
+        metaTemplateName: "HX123",
       },
       usedFallback: false,
     });
     vi.mocked(buildValues).mockReturnValue({ guestName: "Anna" });
     vi.mocked(renderText).mockReturnValue("Hello Anna");
-    vi.mocked(toTwilioBody).mockReturnValue({
+    vi.mocked(toMetaBody).mockReturnValue({
       body: "Hello {{1}}",
       order: ["guestName"],
     });
@@ -602,7 +617,7 @@ describe("send-scheduled", () => {
       lastError: "WhatsApp rejected the message",
       skipReason: null,
       hostSkipped: false,
-      twilioSid: null,
+      metaMessageId: null,
       language: null,
       createdAt: new Date(),
       updatedAt: new Date(),

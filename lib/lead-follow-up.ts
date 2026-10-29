@@ -146,7 +146,7 @@ export async function sendFollowUpToLead(leadId: string): Promise<{ sent: boolea
         author: "SYSTEM",
         body: message,
         language,
-        twilioSid: sid ?? undefined,
+        metaMessageId: sid ?? undefined,
         deliveryStatus: sid ? "sent" : "dry-run",
       },
     });

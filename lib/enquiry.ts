@@ -1,4 +1,3 @@
-import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { answerEnquiry, buildEnquiryHistory, holdingText, fallbackOutput, type EnquiryOutput } from "./enquiry-assistant";
 import { isStopKeyword } from "./guards";
@@ -10,7 +9,6 @@ import { WhatsAppError, sendWhatsApp } from "./whatsapp";
 import { log } from "./log";
 import { assistantEnabled } from "./flags";
 import { assertAiBudget, recordUsage, checkAndSendBudgetWarning, BudgetExceededError } from "./usage";
-import { getAnthropic } from "./flags";
 import type { TurnContext } from "./enquiry-tools";
 import { HOUR, E164, STOP_CONFIRM, type InboundInput } from "./shared-constants";
 
@@ -18,16 +16,16 @@ export async function handleEnquiry(i: InboundInput, now = new Date()): Promise<
   const from = i.from.replace(/^whatsapp:/, "");
   const to = i.to.replace(/^whatsapp:/, "");
   if (!E164.test(from)) return;
-  const owner = await prisma.owner.findUnique({ where: { whatsappFrom: to } });
+  const owner = await prisma.owner.findUnique({ where: { whatsappPhoneNumberId: to } });
   if (!owner) return;
 
   // Idempotent: check LeadMessage and legacy UnmatchedMessage
   if (
-    await prisma.leadMessage.findUnique({ where: { twilioSid: i.sid } })
+    await prisma.leadMessage.findUnique({ where: { metaMessageId: i.sid } })
   )
     return;
   if (
-    await prisma.unmatchedMessage.findUnique({ where: { twilioSid: i.sid } })
+    await prisma.unmatchedMessage.findUnique({ where: { metaMessageId: i.sid } })
   )
     return;
 
@@ -61,7 +59,7 @@ export async function handleEnquiry(i: InboundInput, now = new Date()): Promise<
       author: "GUEST",
       body,
       hasMedia,
-      twilioSid: i.sid,
+      metaMessageId: i.sid,
     },
   });
 
@@ -286,7 +284,7 @@ async function reply(
         author,
         body: text,
         language,
-        twilioSid: sid,
+        metaMessageId: sid,
         deliveryStatus: sid ? "queued" : "dry-run",
       },
     });

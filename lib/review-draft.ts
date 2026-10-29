@@ -166,8 +166,8 @@ export async function draftReviewReply(params: {
       }
     }
 
-    // Check for euro amounts
-    if (/[€₤]\s*\d/.test(parsed.data.reply) || /\d+\s*(€|eur|euro)/i.test(parsed.data.reply)) {
+    // Check for euro amounts (regex fix: avoid matching words like "curiosity")
+    if (/(?:^|\s)[€₤]\s*\d/.test(parsed.data.reply) || /\d+\s*(?:€|eur|euro)(?:\s|\.|,|$)/i.test(parsed.data.reply)) {
       return { success: false, error: "Draft contains monetary amounts. These are not allowed in replies." };
     }
 
@@ -273,7 +273,7 @@ async function shortenDraft(text: string, maxChars: number, hostLanguage: string
   }
 }
 
-function truncateAtSentence(text: string, maxChars: number): string {
+export function truncateAtSentence(text: string, maxChars: number): string {
   if (text.length <= maxChars) return text;
   
   const truncated = text.slice(0, maxChars);

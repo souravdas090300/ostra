@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { TEMPLATE_VARS, fillTemplate, DEFAULT_TEMPLATES } from "@/lib/templates";
-import { validateTemplate } from "@/lib/templates";
+import { TEMPLATE_VARS, fillTemplate, DEFAULT_TEMPLATES, validateTemplate, hashSource } from "@/lib/templates";
 import type { Language } from "@/lib/languages";
 
 type MessageTemplate = {
@@ -18,7 +17,7 @@ type MessageTemplate = {
     sourceHash: string;
     editedByHost: boolean;
     approval: string;
-    contentSid: string | null;
+    metaTemplateName: string | null;
     rejectionReason: string | null;
   }[];
 };
@@ -49,10 +48,15 @@ export default function MessagesSettings({
     const fd = new FormData();
     fd.set("fallbackLanguage", fallbackLanguage);
     fd.set("action", "updateFallback");
-    await fetch("/settings/messages", {
+    const res = await fetch("/settings/messages", {
       method: "POST",
       body: fd,
     });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      alert(data.errors?.join(", ") || "Save failed");
+      return;
+    }
     router.refresh();
   };
 
@@ -94,7 +98,6 @@ export default function MessagesSettings({
             category={templateCategory[type]}
             hostLanguage={owner.hostLanguage}
             languages={languages}
-            defaultTemplates={DEFAULT_TEMPLATES}
           />
         );
       })}
@@ -114,7 +117,6 @@ function TemplateCard({
   category: "UTILITY" | "MARKETING";
   hostLanguage: string;
   languages: Language[];
-  defaultTemplates: Record<string, string>;
 }) {
   const router = useRouter();
   const [body, setBody] = useState(template.body);
@@ -134,10 +136,16 @@ function TemplateCard({
     fd.set("body", body);
     fd.set("enabled", enabled.toString());
     fd.set("action", "updateTemplate");
-    await fetch("/settings/messages", {
+    const res = await fetch("/settings/messages", {
       method: "POST",
       body: fd,
     });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      setSaving(false);
+      alert(data.errors?.join(", ") || "Save failed");
+      return;
+    }
     setSaving(false);
     router.refresh();
   };
@@ -206,9 +214,9 @@ function TemplateCard({
             </div>
           )}
           <div className="mt-2 flex flex-wrap gap-2">
-            {allowedVars.map((v) => (
+            {allowedVars.map((v, i) => (
               <button
-                key={v}
+                key={`${v}-${i}`}
                 type="button"
                 onClick={() => insertVariable(v)}
                 className="text-xs bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded"
@@ -220,8 +228,8 @@ function TemplateCard({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Preview</label>
-          <div className="bg-gray-50 p-3 rounded text-sm border">
+          <span className="block text-sm font-medium text-gray-700 mb-2">Preview</span>
+          <div className="bg-gray-50 p-3 rounded text-sm border" role="status" aria-live="polite">
             {preview}
           </div>
         </div>
@@ -239,6 +247,7 @@ function TemplateCard({
           hostLanguage={hostLanguage}
           languages={languages}
           templateId={template.id}
+          currentSourceHash={hashSource(template.body)}
         />
       </div>
     </div>
@@ -250,17 +259,20 @@ function TranslationsTable({
   hostLanguage,
   languages,
   templateId,
+  currentSourceHash,
 }: {
   translations: MessageTemplate["translations"];
   hostLanguage: string;
   languages: Language[];
   templateId: string;
+  currentSourceHash: string;
 }) {
   const router = useRouter();
   const [addingLanguage, setAddingLanguage] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editBody, setEditBody] = useState("");
+  const [errors, setErrors] = useState<string[]>([]);
 
   const getStatusBadge = (approval: string, rejectionReason: string | null) => {
     switch (approval) {
@@ -285,12 +297,18 @@ function TranslationsTable({
     fd.set("templateId", templateId);
     fd.set("language", selectedLanguage);
     fd.set("action", "add");
-    await fetch("/settings/messages", {
+    const res = await fetch("/settings/messages", {
       method: "POST",
       body: fd,
     });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      setErrors(data.errors ?? ["Add failed"]);
+      return;
+    }
     setAddingLanguage(false);
     setSelectedLanguage("");
+    setErrors([]);
     router.refresh();
   };
 
@@ -305,11 +323,17 @@ function TranslationsTable({
     fd.set("translationId", editingId);
     fd.set("body", editBody);
     fd.set("action", "edit");
-    await fetch("/settings/messages", {
+    const res = await fetch("/settings/messages", {
       method: "POST",
       body: fd,
     });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      setErrors(data.errors ?? ["Save failed"]);
+      return;
+    }
     setEditingId(null);
+    setErrors([]);
     router.refresh();
   };
 
@@ -319,10 +343,16 @@ function TranslationsTable({
     fd.set("templateId", templateId);
     fd.set("language", tr.language);
     fd.set("action", "regenerate");
-    await fetch("/settings/messages", {
+    const res = await fetch("/settings/messages", {
       method: "POST",
       body: fd,
     });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      setErrors(data.errors ?? ["Regenerate failed"]);
+      return;
+    }
+    setErrors([]);
     router.refresh();
   };
 
@@ -330,20 +360,32 @@ function TranslationsTable({
     const fd = new FormData();
     fd.set("translationId", tr.id);
     fd.set("action", "submit");
-    await fetch("/settings/messages", {
+    const res = await fetch("/settings/messages", {
       method: "POST",
       body: fd,
     });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      setErrors(data.errors ?? ["Submit failed"]);
+      return;
+    }
+    setErrors([]);
     router.refresh();
   };
 
   const handleRefreshStatus = async () => {
     const fd = new FormData();
     fd.set("action", "sync");
-    await fetch("/settings/messages", {
+    const res = await fetch("/settings/messages", {
       method: "POST",
       body: fd,
     });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      setErrors(data.errors ?? ["Sync failed"]);
+      return;
+    }
+    setErrors([]);
     router.refresh();
   };
 
@@ -351,10 +393,16 @@ function TranslationsTable({
     const fd = new FormData();
     fd.set("translationId", tr.id);
     fd.set("action", "remove");
-    await fetch("/settings/messages", {
+    const res = await fetch("/settings/messages", {
       method: "POST",
       body: fd,
     });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      setErrors(data.errors ?? ["Remove failed"]);
+      return;
+    }
+    setErrors([]);
     router.refresh();
   };
 
@@ -374,7 +422,7 @@ function TranslationsTable({
             {translations.map((tr) => {
               const lang = languages.find((l) => l.code === tr.language);
               const isHostLanguage = tr.language === hostLanguage;
-              const isStale = !isHostLanguage && tr.sourceHash === ""; // Empty sourceHash means stale after host edit
+              const isStale = !isHostLanguage && tr.sourceHash !== "" && tr.sourceHash !== currentSourceHash;
               return (
                 <tr key={tr.id}>
                   <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">

@@ -15,6 +15,7 @@ import { getAnthropic } from "./flags";
 import { assistantEnabled } from "./flags";
 
 const client = new Anthropic({ timeout: 25_000, maxRetries: 1 });
+type MessageParam = Anthropic.Messages.MessageParam;
 export class EnquiryAssistantError extends Error {}
 
 export type EnquiryOutput = {
@@ -69,12 +70,15 @@ export function fallbackOutput(
 type Stored = { direction: "INBOUND" | "OUTBOUND"; body: string };
 
 /** Alternating user/assistant turns that start with a user turn. Guest text is wrapped as untrusted data. */
-export function buildEnquiryHistory(previous: Stored[], current: string): any[] {
-  const turns: any[] = [];
-  const push = (role: string, text: string) => {
+export function buildEnquiryHistory(previous: Stored[], current: string): MessageParam[] {
+  const turns: MessageParam[] = [];
+  const push = (role: "user" | "assistant", text: string) => {
     const last = turns[turns.length - 1];
-    if (last && last.role === role) last.text += `\n${text}`;
-    else turns.push({ role, text });
+    if (last && last.role === role && typeof last.content === "string") {
+      last.content += `\n${text}`;
+    } else {
+      turns.push({ role, content: text });
+    }
   };
   for (const m of previous) {
     const body = m.body.slice(0, 1000);
@@ -83,7 +87,7 @@ export function buildEnquiryHistory(previous: Stored[], current: string): any[] 
   }
   push("user", `<guest_message>${current.slice(0, 1000)}</guest_message>`);
   if (turns[0].role === "assistant")
-    turns.unshift({ role: "user", text: "(The conversation started with the host's automatic message.)" });
+    turns.unshift({ role: "user", content: "(The conversation started with the host's automatic message.)" });
   return turns;
 }
 
@@ -92,7 +96,7 @@ export type EnquiryInput = {
   today: string;
   knownLanguage: string | null;
   apartmentNames?: string[];
-  history: any[];
+  history: MessageParam[];
   allowedText: string;
   ctx: TurnContext;
 };
@@ -133,6 +137,29 @@ export async function answerEnquiry(input: EnquiryInput): Promise<EnquiryOutput>
   const model = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5-5";
   const system = buildEnquiryPrompt(input);
 
+  // Kill switch check
+  if (!assistantEnabled()) {
+    return fallbackOutput(
+      normaliseLanguage(input.knownLanguage),
+      "AI assistant disabled",
+      "A guest message needs your attention.",
+    );
+  }
+
+  // Budget check before AI call
+  try {
+    await assertAiBudget(input.ctx.ownerId, new Date());
+  } catch (e) {
+    if (e instanceof BudgetExceededError) {
+      return fallbackOutput(
+        normaliseLanguage(input.knownLanguage),
+        "Monthly AI budget exceeded",
+        "A guest message needs your attention.",
+      );
+    }
+    throw e;
+  }
+
   for (let call = 0; call < 4; call++) {
     const forced = call === 3; // the last call must be respond
     const tools = forced ? [RESPOND_TOOL] : [...dataTools, RESPOND_TOOL];
@@ -159,10 +186,10 @@ export async function answerEnquiry(input: EnquiryInput): Promise<EnquiryOutput>
       output: res.usage.output_tokens,
     };
 
-    const uses = res.content.filter((c: any) => c.type === "tool_use");
-    const respond = uses.find((u: any) => u.name === "respond");
+    const uses = res.content.filter((block) => block.type === "tool_use");
+    const respond = uses.find((block) => block.name === "respond");
     if (respond) {
-      const parsed = outputSchema.safeParse((respond as any).input);
+      const parsed = outputSchema.safeParse(respond.input);
       if (!parsed.success) throw new EnquiryAssistantError("The AI returned an unusable answer.");
       const o = parsed.data;
 
@@ -202,6 +229,10 @@ export async function answerEnquiry(input: EnquiryInput): Promise<EnquiryOutput>
         );
       }
       if (out.urgent) out.escalate = true;
+      
+      // Record usage after successful AI call
+      await recordUsage(input.ctx.ownerId, "AI_ENQUIRY", usage);
+      
       return out;
     }
 
@@ -209,7 +240,8 @@ export async function answerEnquiry(input: EnquiryInput): Promise<EnquiryOutput>
 
     // Run tools and continue
     const toolResults = await Promise.all(
-      uses.map(async (u: any) => ({
+      uses.map(async (u) => ({
+        type: "tool_result" as const,
         tool_use_id: u.id,
         content: JSON.stringify(await runTool(u.name, u.input, input.ctx)),
       })),

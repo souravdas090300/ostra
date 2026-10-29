@@ -69,7 +69,7 @@ describe("phone", () => {
     });
 
     it("accepts German numbers", () => {
-      // @ts-ignore - libphonenumber-js type issue
+      // @ts-expect-error -- libphonenumber-js test fixtures use example numbers
       const example = getExampleNumber("DE", "mobile");
       if (example) {
         const r = normalisePhone(example.number);
@@ -82,7 +82,7 @@ describe("phone", () => {
     });
 
     it("accepts Italian numbers", () => {
-      // @ts-ignore - libphonenumber-js type issue
+      // @ts-expect-error -- libphonenumber-js test fixtures use example numbers
       const example = getExampleNumber("IT", "mobile");
       if (example) {
         const r = normalisePhone(example.number);
@@ -92,7 +92,7 @@ describe("phone", () => {
     });
 
     it("accepts UK numbers", () => {
-      // @ts-ignore - libphonenumber-js type issue
+      // @ts-expect-error -- libphonenumber-js test fixtures use example numbers
       const example = getExampleNumber("GB", "mobile");
       if (example) {
         const r = normalisePhone(example.number);
@@ -102,7 +102,7 @@ describe("phone", () => {
     });
 
     it("accepts Saudi Arabian numbers", () => {
-      // @ts-ignore - libphonenumber-js type issue
+      // @ts-expect-error -- libphonenumber-js test fixtures use example numbers
       const example = getExampleNumber("SA", "mobile");
       if (example) {
         const r = normalisePhone(example.number);
@@ -112,7 +112,7 @@ describe("phone", () => {
     });
 
     it("accepts Polish numbers", () => {
-      // @ts-ignore - libphonenumber-js type issue
+      // @ts-expect-error -- libphonenumber-js test fixtures use example numbers
       const example = getExampleNumber("PL", "mobile");
       if (example) {
         const r = normalisePhone(example.number);
@@ -128,7 +128,7 @@ describe("phone", () => {
     });
 
     it("identifies Maltese landlines", () => {
-      // @ts-ignore - libphonenumber-js type issue
+      // @ts-expect-error -- libphonenumber-js test fixtures use example numbers
       const example = getExampleNumber("MT", "fixed_line");
       if (example) {
         const r = normalisePhone(example.number);
@@ -376,8 +376,8 @@ describe("booking-overlaps", () => {
 describe("booking actions (database)", () => {
   vi.setConfig({ testTimeout: 10000 });
 
-  let ownerA: { id: string; email: string };
-  let ownerB: { id: string; email: string };
+  let ownerA: Awaited<ReturnType<typeof prisma.owner.create>>;
+  let ownerB: Awaited<ReturnType<typeof prisma.owner.create>>;
   let apartmentA: { id: string };
 
   beforeEach(async () => {
@@ -428,10 +428,7 @@ describe("booking actions (database)", () => {
 
   it("createBooking stores a DIRECT CONFIRMED booking with phone in E.164", async () => {
     const { requireOwner } = await import("@/lib/auth");
-    vi.mocked(requireOwner).mockResolvedValue({
-      user: { id: ownerA.id, email: ownerA.email, hostLanguage: "en", defaultGuestLanguage: "en", name: "Owner A" },
-      expires: new Date().toISOString(),
-    } as any);
+    vi.mocked(requireOwner).mockResolvedValue(ownerA);
 
     const { createBooking } = await import("@/app/(app)/bookings/actions");
 
@@ -472,10 +469,7 @@ describe("booking actions (database)", () => {
     });
 
     const { requireOwner } = await import("@/lib/auth");
-    vi.mocked(requireOwner).mockResolvedValue({
-      user: { id: ownerA.id, email: ownerA.email, hostLanguage: "en", defaultGuestLanguage: "en", name: "Owner A" },
-      expires: new Date().toISOString(),
-    } as any);
+    vi.mocked(requireOwner).mockResolvedValue(ownerA);
 
     const { createBooking } = await import("@/app/(app)/bookings/actions");
 
@@ -510,10 +504,7 @@ describe("booking actions (database)", () => {
     });
 
     const { requireOwner } = await import("@/lib/auth");
-    vi.mocked(requireOwner).mockResolvedValue({
-      user: { id: ownerA.id, email: ownerA.email, hostLanguage: "en", defaultGuestLanguage: "en", name: "Owner A" },
-      expires: new Date().toISOString(),
-    } as any);
+    vi.mocked(requireOwner).mockResolvedValue(ownerA);
 
     const { createBooking } = await import("@/app/(app)/bookings/actions");
 
@@ -535,9 +526,7 @@ describe("booking actions (database)", () => {
 
   it("another owner's apartmentId creates nothing and returns field error", async () => {
     const { requireOwner } = await import("@/lib/auth");
-    vi.mocked(requireOwner).mockResolvedValue({
-      user: { id: ownerB.id, email: ownerB.email, hostLanguage: "en", defaultGuestLanguage: "en", name: "Owner B" },
-    } as any);
+    vi.mocked(requireOwner).mockResolvedValue(ownerB);
 
     const { createBooking } = await import("@/app/(app)/bookings/actions");
 
@@ -575,10 +564,7 @@ describe("booking actions (database)", () => {
     const originalCheckOut = booking.checkOut;
 
     const { requireOwner } = await import("@/lib/auth");
-    vi.mocked(requireOwner).mockResolvedValue({
-      user: { id: ownerA.id, email: ownerA.email, hostLanguage: "en", defaultGuestLanguage: "en", name: "Owner A" },
-      expires: new Date().toISOString(),
-    } as any);
+    vi.mocked(requireOwner).mockResolvedValue(ownerA);
 
     const { updateBooking } = await import("@/app/(app)/bookings/actions");
 
@@ -613,10 +599,7 @@ describe("booking actions (database)", () => {
     });
 
     const { requireOwner } = await import("@/lib/auth");
-    vi.mocked(requireOwner).mockResolvedValue({
-      user: { id: ownerA.id, email: ownerA.email, hostLanguage: "en", defaultGuestLanguage: "en", name: "Owner A" },
-      expires: new Date().toISOString(),
-    } as any);
+    vi.mocked(requireOwner).mockResolvedValue(ownerA);
 
     const { cancelDirectBooking } = await import("@/app/(app)/bookings/actions");
 
@@ -642,9 +625,7 @@ describe("booking actions (database)", () => {
     });
 
     const { requireOwner } = await import("@/lib/auth");
-    vi.mocked(requireOwner).mockResolvedValue({
-      user: { id: ownerB.id, email: ownerB.email, hostLanguage: "en", defaultGuestLanguage: "en", name: "Owner B" },
-    } as any);
+    vi.mocked(requireOwner).mockResolvedValue(ownerB);
 
     const { updateBooking } = await import("@/app/(app)/bookings/actions");
 
@@ -660,10 +641,7 @@ describe("booking actions (database)", () => {
 
   it("invalid phone is not saved and returns field error", async () => {
     const { requireOwner } = await import("@/lib/auth");
-    vi.mocked(requireOwner).mockResolvedValue({
-      user: { id: ownerA.id, email: ownerA.email, hostLanguage: "en", defaultGuestLanguage: "en", name: "Owner A" },
-      expires: new Date().toISOString(),
-    } as any);
+    vi.mocked(requireOwner).mockResolvedValue(ownerA);
 
     const { createBooking } = await import("@/app/(app)/bookings/actions");
 
@@ -698,10 +676,7 @@ describe("booking actions (database)", () => {
     });
 
     const { requireOwner } = await import("@/lib/auth");
-    vi.mocked(requireOwner).mockResolvedValue({
-      user: { id: ownerA.id, email: ownerA.email, hostLanguage: "en", defaultGuestLanguage: "en", name: "Owner A" },
-      expires: new Date().toISOString(),
-    } as any);
+    vi.mocked(requireOwner).mockResolvedValue(ownerA);
 
     const { updateBooking } = await import("@/app/(app)/bookings/actions");
 

@@ -9,6 +9,10 @@ vi.mock("@/lib/db", () => ({
       updateMany: vi.fn(),
       count: vi.fn(),
     },
+    optOut: {
+      upsert: vi.fn(),
+      count: vi.fn(),
+    },
     scheduledMessage: {
       updateMany: vi.fn(),
     },

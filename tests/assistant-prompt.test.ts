@@ -45,7 +45,7 @@ describe("buildSystemPrompt", () => {
 
   it("contains today's date", () => {
     const prompt = buildSystemPrompt(baseInput);
-    expect(prompt).toContain("Today in Malta: 2026-10-30");
+    expect(prompt).toContain("Today in Malta: Fri 30 Oct");
   });
 
   it("contains check-in and check-out dates", () => {

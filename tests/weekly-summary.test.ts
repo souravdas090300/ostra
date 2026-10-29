@@ -3,8 +3,21 @@ import { buildWeeklySummary, getIsoWeekString } from "@/lib/weekly-summary";
 import { prisma } from "@/lib/db";
 
 // Mock dependencies
-vi.mock("@/lib/db");
-vi.mock("@/lib/usage");
+vi.mock("@/lib/db", () => ({
+  prisma: {
+    owner: { findUnique: vi.fn() },
+    apartment: { findMany: vi.fn() },
+    booking: { findMany: vi.fn(), count: vi.fn() },
+    message: { count: vi.fn() },
+    calendarFeed: { count: vi.fn() },
+    exportFeed: { count: vi.fn() },
+    lead: { count: vi.fn() },
+  },
+}));
+vi.mock("@/lib/usage", () => ({
+  monthlyAiCostCents: vi.fn(),
+  monthlyCount: vi.fn(),
+}));
 
 describe("weekly-summary", () => {
   beforeEach(() => {
@@ -35,7 +48,7 @@ describe("weekly-summary", () => {
         monthlyTemplateCap: 1000,
         enquiriesEnabled: false,
         passwordHash: "hash",
-        whatsappFrom: null,
+        whatsappPhoneNumberId: null,
         defaultGuestLanguage: "en",
         fallbackLanguage: "en",
         retentionDays: 90,
@@ -80,7 +93,7 @@ describe("weekly-summary", () => {
         monthlyTemplateCap: 1000,
         enquiriesEnabled: false,
         passwordHash: "hash",
-        whatsappFrom: null,
+        whatsappPhoneNumberId: null,
         defaultGuestLanguage: "en",
         fallbackLanguage: "en",
         retentionDays: 90,
@@ -133,7 +146,7 @@ describe("weekly-summary", () => {
         monthlyTemplateCap: 1000,
         enquiriesEnabled: false,
         passwordHash: "hash",
-        whatsappFrom: null,
+        whatsappPhoneNumberId: null,
         defaultGuestLanguage: "en",
         fallbackLanguage: "en",
         retentionDays: 90,
@@ -174,7 +187,7 @@ describe("weekly-summary", () => {
         monthlyTemplateCap: 1000,
         enquiriesEnabled: true,
         passwordHash: "hash",
-        whatsappFrom: null,
+        whatsappPhoneNumberId: null,
         defaultGuestLanguage: "en",
         fallbackLanguage: "en",
         retentionDays: 90,
@@ -212,7 +225,7 @@ describe("weekly-summary", () => {
         monthlyTemplateCap: 1000,
         enquiriesEnabled: false,
         passwordHash: "hash",
-        whatsappFrom: null,
+        whatsappPhoneNumberId: null,
         defaultGuestLanguage: "en",
         fallbackLanguage: "en",
         retentionDays: 90,
@@ -256,7 +269,7 @@ describe("weekly-summary", () => {
         monthlyTemplateCap: 1000,
         enquiriesEnabled: false,
         passwordHash: "hash",
-        whatsappFrom: null,
+        whatsappPhoneNumberId: null,
         defaultGuestLanguage: "en",
         fallbackLanguage: "en",
         retentionDays: 90,
@@ -312,7 +325,7 @@ describe("weekly-summary", () => {
         monthlyTemplateCap: 1000,
         enquiriesEnabled: false,
         passwordHash: "hash",
-        whatsappFrom: null,
+        whatsappPhoneNumberId: null,
         defaultGuestLanguage: "en",
         fallbackLanguage: "en",
         retentionDays: 90,

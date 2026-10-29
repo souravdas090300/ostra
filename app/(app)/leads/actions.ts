@@ -9,6 +9,7 @@ import { normaliseLanguage } from "@/lib/languages";
 import { translateText, missingTokens, ReplyTranslationError } from "@/lib/translate-reply";
 import { rateLimit } from "@/lib/rate-limit";
 import { validateDateRange, MAX_TEXT, SimpleState, PreviewState, saveOriginalBody } from "@/lib/validation";
+import { reportError } from "@/lib/report-error";
 
 export async function previewLeadReply(
   leadId: string,
@@ -33,12 +34,13 @@ export async function previewLeadReply(
   }
 
   try {
-    const translation = await translateText(text, hostLanguage, guestLanguage);
-    const backTranslation = await translateText(translation, guestLanguage, hostLanguage);
+    const translation = await translateText(text, hostLanguage, guestLanguage, session.id);
+    const backTranslation = await translateText(translation, guestLanguage, hostLanguage, session.id);
     const missing = missingTokens(text, translation);
     const warnings = missing.length ? [`These were changed or missing in the translation, check them: ${missing.join(", ")}`] : [];
     return { translation, backTranslation, warnings };
   } catch (e) {
+    reportError(e, { context: "previewLeadReply", leadId });
     return { translation: text, backTranslation: text, warnings: ["Translation failed - sending original text"], error: e instanceof ReplyTranslationError ? e.message : "Could not translate right now." };
   }
 }
@@ -67,11 +69,12 @@ export async function recheckLeadTranslation(
   }
 
   try {
-    const backTranslation = await translateText(translation.slice(0, MAX_TEXT), guestLanguage, hostLanguage);
+    const backTranslation = await translateText(translation.slice(0, MAX_TEXT), guestLanguage, hostLanguage, session.id);
     const missing = missingTokens(original, translation);
     const warnings = missing.length ? [`These were changed or missing, check them: ${missing.join(", ")}`] : [];
     return { translation, backTranslation, warnings };
   } catch (e) {
+    reportError(e, { context: "recheckLeadTranslation", leadId });
     return { translation, backTranslation: original, warnings: ["Back-translation failed"], error: e instanceof ReplyTranslationError ? e.message : "Could not check right now." };
   }
 }
@@ -109,7 +112,7 @@ export async function sendLeadReply(
         body,
         originalBody: saveOriginalBody(original, body),
         language: lead.language ?? session.defaultGuestLanguage,
-        twilioSid: sid,
+        metaMessageId: sid,
         deliveryStatus: sid ? "queued" : "dry-run",
       },
     });

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { requireOwner } from "@/lib/auth";
 import { toggleEnquiries } from "./actions";
+import Link from "next/link";
 
 export default async function EnquiriesSettingsPage() {
   const session = await requireOwner();
@@ -21,7 +22,7 @@ export default async function EnquiriesSettingsPage() {
           <div>
             <h2 className="text-lg font-medium">Enable Enquiry Assistant</h2>
             <p className="text-sm text-gray-600 mt-1">
-              When enabled, guests who message you but don't have a confirmed booking will be handled by the AI assistant.
+              When enabled, guests who message you but don&apos;t have a confirmed booking will be handled by the AI assistant.
               The assistant can check availability, provide quotes, and answer basic questions.
             </p>
           </div>
@@ -63,12 +64,12 @@ export default async function EnquiriesSettingsPage() {
           The assistant will only share this public information with guests.
         </p>
         <div className="pt-4">
-          <a
+          <Link
             href="/apartments"
             className="text-blue-600 hover:text-blue-800 text-sm font-medium"
           >
             Edit apartment public info →
-          </a>
+          </Link>
         </div>
       </div>
     </div>

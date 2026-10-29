@@ -33,7 +33,7 @@ async function loadApartments(
       },
     },
   });
-  return rows.map((a: any) => ({
+  return rows.map((a) => ({
     id: a.id,
     name: a.name,
     maxGuests: a.maxGuests,
@@ -41,14 +41,14 @@ async function loadApartments(
     minNights: a.minNights,
     baseNightlyCents: a.baseNightlyCents,
     cleaningFeeCents: a.cleaningFeeCents,
-    rates: a.rates?.map((r: any) => ({
+    rates: a.rates?.map((r) => ({
       startYmd: r.startDate.toISOString().slice(0, 10),
       endYmd: r.endDate.toISOString().slice(0, 10),
       nightlyCents: r.nightlyCents,
       minNights: r.minNights,
       createdAt: r.createdAt,
     })) || [],
-    feeds: a.feeds?.map((c: any) => ({
+    feeds: a.feeds?.map((c) => ({
       lastSuccessAt: c.lastSuccessAt,
       lastError: c.lastError,
     })) || [],

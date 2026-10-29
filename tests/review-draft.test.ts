@@ -1,16 +1,29 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { draftReviewReply } from "@/lib/review-draft";
+import { draftReviewReply, truncateAtSentence } from "@/lib/review-draft";
 import { prisma } from "@/lib/db";
 import { scrub } from "@/lib/scrub";
+import { assertAiBudget, recordUsage } from "@/lib/usage";
 
 // Mock dependencies
-vi.mock("@/lib/db");
+vi.mock("@/lib/db", () => ({
+  prisma: {
+    usageDaily: { count: vi.fn(), upsert: vi.fn() },
+    owner: { findUnique: vi.fn() },
+    apartment: { findFirst: vi.fn() },
+  },
+}));
 vi.mock("@anthropic-ai/sdk");
-vi.mock("@/lib/usage");
+vi.mock("@/lib/usage", () => ({
+  assertAiBudget: vi.fn(),
+  recordUsage: vi.fn(),
+  monthlyAiCostCents: vi.fn(),
+}));
 
 describe("review-draft", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(assertAiBudget).mockResolvedValue(undefined);
+    vi.mocked(recordUsage).mockResolvedValue(undefined);
   });
 
   describe("rate limiting", () => {
@@ -21,7 +34,7 @@ describe("review-draft", () => {
         email: "test@example.com",
         hostLanguage: "en",
         passwordHash: "hash",
-        whatsappFrom: null,
+        whatsappPhoneNumberId: null,
         defaultGuestLanguage: "en",
         fallbackLanguage: "en",
         retentionDays: 90,
@@ -79,7 +92,7 @@ describe("review-draft", () => {
         email: "test@example.com",
         hostLanguage: "en",
         passwordHash: "hash",
-        whatsappFrom: null,
+        whatsappPhoneNumberId: null,
         defaultGuestLanguage: "en",
         fallbackLanguage: "en",
         retentionDays: 90,
@@ -110,7 +123,7 @@ describe("review-draft", () => {
         hostLanguage: "en",
         passwordHash: "hash",
         monthlyAiBudgetCents: 1500,
-        whatsappFrom: null,
+        whatsappPhoneNumberId: null,
         defaultGuestLanguage: "en",
         fallbackLanguage: "en",
         retentionDays: 90,
@@ -125,9 +138,7 @@ describe("review-draft", () => {
         updatedAt: new Date(),
       } as any);
 
-      // Mock monthlyAiCostCents to return budget amount
-      const { monthlyAiCostCents } = await import("@/lib/usage");
-      vi.mocked(monthlyAiCostCents).mockResolvedValue(1500);
+      vi.mocked(assertAiBudget).mockRejectedValue(new Error("Monthly AI budget reached."));
 
       const result = await draftReviewReply({
         ownerId: "owner1",
@@ -148,7 +159,7 @@ describe("review-draft", () => {
         email: "test@example.com",
         hostLanguage: "en",
         passwordHash: "hash",
-        whatsappFrom: null,
+        whatsappPhoneNumberId: null,
         defaultGuestLanguage: "en",
         fallbackLanguage: "en",
         retentionDays: 90,
@@ -179,7 +190,7 @@ describe("review-draft", () => {
         email: "test@example.com",
         hostLanguage: "en",
         passwordHash: "hash",
-        whatsappFrom: null,
+        whatsappPhoneNumberId: null,
         defaultGuestLanguage: "en",
         fallbackLanguage: "en",
         retentionDays: 90,
@@ -224,8 +235,6 @@ describe("review-draft", () => {
 
   describe("length validation", () => {
     it("should truncate at sentence boundary when over limit", () => {
-      const { truncateAtSentence } = require("@/lib/review-draft");
-
       const longText = "This is sentence one. This is sentence two. This is sentence three.";
       const truncated = truncateAtSentence(longText, 35);
 
@@ -234,8 +243,6 @@ describe("review-draft", () => {
     });
 
     it("should truncate at word boundary if no sentence", () => {
-      const { truncateAtSentence } = require("@/lib/review-draft");
-
       const longText = "This is a very long text without any sentence endings";
       const truncated = truncateAtSentence(longText, 20);
 
@@ -247,16 +254,30 @@ describe("review-draft", () => {
   describe("euro amount blocking", () => {
     it("should block drafts with euro amounts", () => {
       const draft = "Thank you for your stay. Here is €50 refund.";
-      const hasEuro = /[€₤]\s*\d/.test(draft) || /\d+\s*(€|eur|euro)/i.test(draft);
+      const hasEuro = /(?:^|\s)[€₤]\s*\d/.test(draft) || /\d+\s*(?:€|eur|euro)(?:\s|\.|,|$)/i.test(draft);
 
       expect(hasEuro).toBe(true);
     });
 
     it("should block drafts with EUR amounts", () => {
       const draft = "Thank you for your stay. Here is 50 EUR refund.";
-      const hasEuro = /[€₤]\s*\d/.test(draft) || /\d+\s*(€|eur|euro)/i.test(draft);
+      const hasEuro = /(?:^|\s)[€₤]\s*\d/.test(draft) || /\d+\s*(?:€|eur|euro)(?:\s|\.|,|$)/i.test(draft);
 
       expect(hasEuro).toBe(true);
+    });
+
+    it("should not false positive on words like curiosity", () => {
+      const draft = "We appreciate your curiosity about our amenities.";
+      const hasEuro = /(?:^|\s)[€₤]\s*\d/.test(draft) || /\d+\s*(?:€|eur|euro)(?:\s|\.|,|$)/i.test(draft);
+
+      expect(hasEuro).toBe(false);
+    });
+
+    it("should not false positive on words with euro in middle", () => {
+      const draft = "The European Parliament is nearby.";
+      const hasEuro = /(?:^|\s)[€₤]\s*\d/.test(draft) || /\d+\s*(?:€|eur|euro)(?:\s|\.|,|$)/i.test(draft);
+
+      expect(hasEuro).toBe(false);
     });
   });
 

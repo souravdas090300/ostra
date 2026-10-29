@@ -1,4 +1,4 @@
-import { createHash } from "crypto";
+import { createHash } from "node:crypto";
 
 type MessageType = "PRE_ARRIVAL" | "CHECK_IN" | "CHECK_OUT" | "REVIEW_REQUEST";
 
@@ -29,7 +29,7 @@ export const DEFAULT_TEMPLATES: Record<MessageType, string> = {
 };
 
 export const MAX_BODY = 1024;
-const VAR_RE = /\{\{\s*([A-Za-z]+)\s*\}\}/g;
+const VAR_RE = /\{\{([A-Za-z]+)\}\}/g;
 
 /** Variable names in order of first appearance. */
 export function extractVars(body: string): string[] {
@@ -46,14 +46,14 @@ export function validateTemplate(type: MessageType, body: string): string[] {
   if (text.length > MAX_BODY) errors.push(`The message is longer than ${MAX_BODY} characters.`);
   const allowed = TEMPLATE_VARS[type];
   for (const v of extractVars(text)) if (!allowed.includes(v)) errors.push(`Unknown variable {{${v}}}.`);
-  if (/^\{\{[^}]*\}\}/.test(text)) errors.push("The message cannot start with a variable.");
-  if (/\{\{[^}]*\}\}$/.test(text)) errors.push("The message cannot end with a variable.");
-  if (/\{\{[^}]*\}\}\s*\{\{[^}]*\}\}/.test(text)) errors.push("Two variables cannot be next to each other.");
+  if (/^\{\{\w+\}\}/.test(text)) errors.push("The message cannot start with a variable.");
+  if (/\{\{\w+\}\}$/.test(text)) errors.push("The message cannot end with a variable.");
+  if (/\{\{\w+\}\}\s*\{\{\w+\}\}/.test(text)) errors.push("Two variables cannot be next to each other.");
   return errors;
 }
 
 /** {{guestName}} -> {{1}} by order of first appearance. `order` maps numbers back to names. */
-export function toTwilioBody(body: string): { body: string; order: string[] } {
+export function toMetaBody(body: string): { body: string; order: string[] } {
   const order = extractVars(body);
   return {
     body: body.replace(VAR_RE, (_m, name: string) => `{{${order.indexOf(name) + 1}}}`),
