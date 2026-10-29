@@ -62,7 +62,7 @@ describe("phone", () => {
     });
 
     it("accepts German numbers", () => {
-      // @ts-ignore - libphonenumber-js type issue
+      // @ts-expect-error -- libphonenumber-js test fixtures use example numbers
       const example = getExampleNumber("DE", "mobile");
       if (example) {
         const r = normalisePhone(example.number);
@@ -75,7 +75,7 @@ describe("phone", () => {
     });
 
     it("accepts Italian numbers", () => {
-      // @ts-ignore - libphonenumber-js type issue
+      // @ts-expect-error -- libphonenumber-js test fixtures use example numbers
       const example = getExampleNumber("IT", "mobile");
       if (example) {
         const r = normalisePhone(example.number);
@@ -85,7 +85,7 @@ describe("phone", () => {
     });
 
     it("accepts UK numbers", () => {
-      // @ts-ignore - libphonenumber-js type issue
+      // @ts-expect-error -- libphonenumber-js test fixtures use example numbers
       const example = getExampleNumber("GB", "mobile");
       if (example) {
         const r = normalisePhone(example.number);
@@ -95,7 +95,7 @@ describe("phone", () => {
     });
 
     it("accepts Saudi Arabian numbers", () => {
-      // @ts-ignore - libphonenumber-js type issue
+      // @ts-expect-error -- libphonenumber-js test fixtures use example numbers
       const example = getExampleNumber("SA", "mobile");
       if (example) {
         const r = normalisePhone(example.number);
@@ -105,7 +105,7 @@ describe("phone", () => {
     });
 
     it("accepts Polish numbers", () => {
-      // @ts-ignore - libphonenumber-js type issue
+      // @ts-expect-error -- libphonenumber-js test fixtures use example numbers
       const example = getExampleNumber("PL", "mobile");
       if (example) {
         const r = normalisePhone(example.number);
@@ -121,7 +121,7 @@ describe("phone", () => {
     });
 
     it("identifies Maltese landlines", () => {
-      // @ts-ignore - libphonenumber-js type issue
+      // @ts-expect-error -- libphonenumber-js test fixtures use example numbers
       const example = getExampleNumber("MT", "fixed_line");
       if (example) {
         const r = normalisePhone(example.number);

@@ -1,5 +1,3 @@
-// eslint-disable-next-line @typescript-eslint/no-misused-promises
-/* eslint-disable no-await-in-loop */
 // Job implementations intentionally use await inside loops for:
 // - Sequential processing to avoid database overload
 // - Conditional logic that depends on query results
@@ -219,7 +217,6 @@ export const escalationRemindersJob = async (): Promise<Record<string, number>> 
 
 export const selfCheckJob = async (): Promise<Record<string, number>> => {
   const { withJobRun } = await import("./job-run");
-  // eslint-disable-next-line complexity -- Original implementation copied; refactoring would change behavior
   const result = await withJobRun("self-check", async () => {
     const { prisma } = await import("./db");
     const { notifyHost } = await import("./notify");

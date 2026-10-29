@@ -3,18 +3,19 @@
 import { useState } from "react";
 import { tryDates } from "@/app/(app)/apartments/actions";
 import { reasonToText } from "@/lib/availability-core";
+import type { AvailabilityResult } from "@/lib/availability-core";
 
 export function TryDates({ apartmentId }: { apartmentId: string }) {
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
   const [guests, setGuests] = useState("2");
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<AvailabilityResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
 
   const handleCheck = async () => {
     setError(undefined);
-    setResult(undefined);
+    setResult(null);
     setLoading(true);
 
     try {
@@ -36,9 +37,9 @@ export function TryDates({ apartmentId }: { apartmentId: string }) {
       if (!response.ok) {
         setError(response.error || "Failed to check availability");
       } else {
-        setResult(response.result);
+        setResult(response.result ?? null);
       }
-    } catch (e) {
+    } catch {
       setError("Failed to check availability");
     } finally {
       setLoading(false);
@@ -103,7 +104,7 @@ export function TryDates({ apartmentId }: { apartmentId: string }) {
               {result.nightly && result.nightly.length > 0 && (
                 <div className="text-sm">
                   <p className="font-medium mt-2">Nightly breakdown:</p>
-                  {result.nightly.map((n: any) => (
+                  {result.nightly.map((n) => (
                     <div key={n.date} className="flex justify-between">
                       <span>{n.date}</span>
                       <span>€{(n.cents / 100).toFixed(2)}</span>
@@ -115,7 +116,7 @@ export function TryDates({ apartmentId }: { apartmentId: string }) {
           ) : (
             <div>
               <p className="text-red-600 font-medium">Not available</p>
-              <p className="text-sm">{result.reason ? reasonToText(result.reason as any) : "Not available"}</p>
+              <p className="text-sm">{result.reason ? reasonToText(result.reason) : "Not available"}</p>
             </div>
           )}
         </div>
