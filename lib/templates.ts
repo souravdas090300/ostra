@@ -61,9 +61,6 @@ export function toMetaBody(body: string): { body: string; order: string[] } {
   };
 }
 
-// Legacy alias for backward compatibility
-export const toTwilioBody = toMetaBody;
-
 export const fillTemplate = (body: string, values: Record<string, string>): string =>
   body.replace(VAR_RE, (_m, name: string) => values[name] ?? "");
 
