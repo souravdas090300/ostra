@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   extractVars,
   validateTemplate,
-  toTwilioBody,
+  toMetaBody,
   fillTemplate,
   hashSource,
   DEFAULT_TEMPLATES,
@@ -67,15 +67,15 @@ describe("validateTemplate", () => {
   });
 });
 
-describe("toTwilioBody", () => {
+describe("toMetaBody", () => {
   it("numbers variables by first appearance", () => {
-    const result = toTwilioBody("Hello {{guestName}}, welcome to {{apartmentName}}");
+    const result = toMetaBody("Hello {{guestName}}, welcome to {{apartmentName}}");
     expect(result.body).toBe("Hello {{1}}, welcome to {{2}}");
     expect(result.order).toEqual(["guestName", "apartmentName"]);
   });
 
   it("handles repeated variables", () => {
-    const result = toTwilioBody("{{guestName}} {{guestName}}");
+    const result = toMetaBody("{{guestName}} {{guestName}}");
     expect(result.body).toBe("{{1}} {{1}}");
     expect(result.order).toEqual(["guestName"]);
   });
