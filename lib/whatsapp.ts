@@ -7,14 +7,14 @@ import {
   type WhatsAppMode,
 } from "./meta-whatsapp";
 
-type UsageKind = "AI_REPLY" | "AI_TRANSLATE" | "AI_TEMPLATE" | "WA_TEMPLATE" | "WA_FREEFORM";
+type UsageKind = "AI_REPLY" | "AI_TRANSLATE" | "AI_TEMPLATE" | "AI_ENQUIRY" | "WA_TEMPLATE" | "WA_FREEFORM";
 
 export { WhatsAppMode, whatsappMode as metaWhatsappMode };
 
 export const whatsappMode = (): WhatsAppMode => metaWhatsappMode();
 
 export class WhatsAppError extends Error {
-  constructor(message: string, public permanent: boolean, public code?: number) {
+  constructor(message: string, public permanent: boolean, public code?: number, public kind?: string) {
     super(message);
   }
 }
