@@ -1,10 +1,10 @@
 import { prisma } from "./db";
 import { buildValues, pickTranslation, renderText } from "./message-render";
 import { inAllowedWindow, latestUseful } from "./send-time";
-import { toTwilioBody } from "./templates";
+import { toMetaBody } from "./templates";
 import { WhatsAppError, sendWhatsApp, whatsappMode } from "./whatsapp";
 import { automaticMessagesEnabled } from "./flags";
-import { monthlyCount, recordUsage } from "./usage";
+import { monthlyCount } from "./usage";
 
 const BATCH = 20;
 const MAX_ATTEMPTS = 3;
@@ -129,15 +129,29 @@ async function sendOne(id: string, now: Date, s: SendSummary) {
 
   const values = buildValues(b, apt, picked.translation.language);
   const text = renderText(picked.translation.body, values);
-  const { order } = toTwilioBody(picked.translation.body);
-  const variables = Object.fromEntries(order.map((name, i) => [String(i + 1), values[name] ?? ""]));
+  const { order } = toMetaBody(picked.translation.body);
+  
+  // Build Meta template components from body parameters
+  const components = order.length > 0
+    ? [{
+        type: "body",
+        parameters: order.map((name) => ({
+          type: "text",
+          text: values[name] ?? "",
+        })),
+      }]
+    : undefined;
 
   try {
     const { sid } = await sendWhatsApp({
       to: b.guestPhone!,
       text,
-      template: picked.translation.contentSid
-        ? { contentSid: picked.translation.contentSid, variables }
+      template: picked.translation.metaTemplateName
+        ? {
+            name: picked.translation.metaTemplateName,
+            languageCode: picked.translation.language,
+            components,
+          }
         : undefined,
       ownerId: owner.id,
       kind: "WA_TEMPLATE",
@@ -148,7 +162,7 @@ async function sendOne(id: string, now: Date, s: SendSummary) {
         data: {
           status: "SENT",
           sentAt: now,
-          twilioSid: sid,
+          metaMessageId: sid,
           language: picked.translation.language,
           lastError: null,
         },
@@ -160,7 +174,7 @@ async function sendOne(id: string, now: Date, s: SendSummary) {
           author: "SYSTEM",
           body: text,
           scheduledMessageId: id,
-          twilioSid: sid,
+          metaMessageId: sid,
           deliveryStatus: sid ? "queued" : "dry-run",
         },
       }),

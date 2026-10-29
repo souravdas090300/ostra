@@ -34,7 +34,7 @@ describe("processInbound", () => {
       data: {
         email: "test@example.com",
         passwordHash: "hash",
-        whatsappFrom: "+35679123456",
+        whatsappPhoneNumberId: "+35679123456",
       },
     });
 
@@ -94,7 +94,7 @@ describe("processInbound", () => {
       data: {
         email: "test@example.com",
         passwordHash: "hash",
-        whatsappFrom: "+35679123456",
+        whatsappPhoneNumberId: "+35679123456",
       },
     });
 
@@ -159,7 +159,7 @@ describe("processInbound", () => {
       data: {
         email: "test@example.com",
         passwordHash: "hash",
-        whatsappFrom: "+35679123456",
+        whatsappPhoneNumberId: "+35679123456",
       },
     });
 
@@ -171,7 +171,7 @@ describe("processInbound", () => {
       numMedia: 0,
     });
 
-    const unmatched = await prisma.unmatchedMessage.findUnique({ where: { twilioSid: "SMtest" } });
+    const unmatched = await prisma.unmatchedMessage.findUnique({ where: { metaMessageId: "SMtest" } });
     expect(unmatched).toBeDefined();
     expect(unmatched?.phone).toBe("+4915112345678");
   });
@@ -181,7 +181,7 @@ describe("processInbound", () => {
       data: {
         email: "test@example.com",
         passwordHash: "hash",
-        whatsappFrom: "+35679123456",
+        whatsappPhoneNumberId: "+35679123456",
       },
     });
 
@@ -240,7 +240,7 @@ describe("processInbound", () => {
       data: {
         email: "test@example.com",
         passwordHash: "hash",
-        whatsappFrom: "+35679123456",
+        whatsappPhoneNumberId: "+35679123456",
       },
     });
 

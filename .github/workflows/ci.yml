@@ -9,6 +9,22 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://ostra:ostra_test_password@localhost:5432/ostra_test
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ostra
+          POSTGRES_PASSWORD: ostra_test_password
+          POSTGRES_DB: ostra_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ostra -d ostra_test"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
 
     services:
       postgres:
@@ -31,10 +47,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Prepare test database
+        run: npx prisma migrate deploy
 
       - name: Run lint
         run: npm run lint

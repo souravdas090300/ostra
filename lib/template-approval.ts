@@ -1,14 +1,27 @@
 import { prisma } from "./db";
-import { validateTemplate, toTwilioBody } from "./templates";
+import { validateTemplate, toMetaBody, hashSource } from "./templates";
 import { whatsappMode } from "./whatsapp";
-import twilio from "twilio";
 import { log } from "./log";
+import { z } from "zod";
 
-const getClient = () => twilio(process.env.TWILIO_ACCOUNT_SID!, process.env.TWILIO_AUTH_TOKEN!);
+const TEMPLATE_CATEGORY: Record<string, string> = {
+  PRE_ARRIVAL: "MARKETING",
+  CHECK_IN: "UTILITY",
+  CHECK_OUT: "UTILITY",
+  REVIEW_REQUEST: "MARKETING",
+};
+
+const SAMPLE: Record<string, string> = {
+  guestName: "Anna",
+  apartmentName: "Seaview Apartment",
+  checkInDate: "10 January 2026",
+  checkInTime: "14:00",
+  checkOutTime: "11:00",
+  reviewUrl: "https://example.com/review",
+};
 
 /**
  * Map Ostra language codes to WhatsApp locale codes.
- * WhatsApp uses a subset of locales; unsupported languages will be rejected.
  */
 const WHATSAPP_LOCALE_MAP: Record<string, string> = {
   en: "en",
@@ -17,17 +30,21 @@ const WHATSAPP_LOCALE_MAP: Record<string, string> = {
   es: "es",
   it: "it",
   ar: "ar",
-  pt: "pt",
+  pt: "pt_PT",
   nl: "nl",
   pl: "pl",
   ru: "ru",
   tr: "tr",
-  // Add more as needed from WhatsApp's supported list
 };
 
 function toWhatsAppLocale(code: string): string {
   return WHATSAPP_LOCALE_MAP[code] ?? code;
 }
+
+const graphApiUrl = (path: string) => {
+  const version = process.env.META_API_VERSION || "v18.0";
+  return `https://graph.facebook.com/${version}/${path}`;
+};
 
 export async function submitTranslation(translationId: string, ownerId: string): Promise<void> {
   const mode = whatsappMode();
@@ -49,36 +66,48 @@ export async function submitTranslation(translationId: string, ownerId: string):
     throw new Error(`Template validation failed: ${errors.join(", ")}`);
   }
 
-  const { body, order } = toTwilioBody(translation.body);
+  const { body, order } = toMetaBody(translation.body);
   const locale = toWhatsAppLocale(translation.language);
+  const category = TEMPLATE_CATEGORY[translation.template.type];
+  const name = `ostra_${translation.template.type.toLowerCase()}_${translation.language}_${hashSource(translation.body)}`;
 
   try {
-    // Create content in Twilio
-    const client = getClient() as unknown as { content: { create: (data: unknown) => Promise<{ sid: string }> } };
-    const content = await client.content.create({
-      friendlyName: `ostra_${translation.template.type}_${translation.language}_${translation.sourceHash.slice(0, 8)}`,
-      language: locale,
-      variables: order.map(() => ({
-        type: "text",
-        default_value: "Sample",
-      })),
-      types: {
-        "twilio/text": {
-          body,
-        },
+    const response = await fetch(graphApiUrl(`${process.env.META_WABA_ID}/message_templates`), {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.META_ACCESS_TOKEN}`,
+        "Content-Type": "application/json",
       },
+      body: JSON.stringify({
+        name,
+        language: locale,
+        category,
+        components: [{
+          type: "BODY",
+          text: body,
+          ...(order.length ? { example: { body_text: [order.map(v => SAMPLE[v] ?? "Example")] } } : {}),
+        }],
+      }),
     });
 
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Meta API error: ${error}`);
+    }
+
+    const result = await response.json();
+    
     await prisma.templateTranslation.update({
       where: { id: translationId },
       data: {
-        contentSid: content.sid,
+        metaTemplateName: name,
+        metaTemplateId: result.id,
+        metaCategory: result.category,
         approval: "PENDING",
       },
     });
   } catch (e: unknown) {
-    // If the language is not supported by WhatsApp, mark as rejected
-    if (e instanceof Error && (e.message.includes("language") || ("code" in e && typeof e.code === "number" && e.code === 21612))) {
+    if (e instanceof Error && e.message.includes("language")) {
       await prisma.templateTranslation.update({
         where: { id: translationId },
         data: {
@@ -94,29 +123,52 @@ export async function submitTranslation(translationId: string, ownerId: string):
 
 export async function syncApprovals(): Promise<void> {
   const pending = await prisma.templateTranslation.findMany({
-    where: { approval: "PENDING", contentSid: { not: null } },
+    where: { approval: "PENDING", metaTemplateName: { not: null } },
     include: { template: true },
   });
 
+  const response = await fetch(graphApiUrl(`${process.env.META_WABA_ID}/message_templates?fields=name,status,language,category,id,rejected_reason`), {
+    headers: {
+      "Authorization": `Bearer ${process.env.META_ACCESS_TOKEN}`,
+    },
+  });
+
+  if (!response.ok) {
+    log("error", "template_sync_failed", { status: response.status });
+    return;
+  }
+
+  const result = z.object({
+    data: z.array(z.object({
+      name: z.string(),
+      status: z.string(),
+      rejected_reason: z.string().optional(),
+    }).passthrough()).optional(),
+  }).safeParse(await response.json());
+  if (!result.success) {
+    log("error", "template_sync_invalid_response", {});
+    return;
+  }
+  const metaTemplates = result.data.data ?? [];
+
   for (const t of pending) {
     try {
-      if (!t.contentSid) continue;
+      if (!t.metaTemplateName) continue;
 
-      const client = getClient() as unknown as { content: (sid: string) => { fetch: () => Promise<{ whatsapp?: { approvalStatus?: string; rejectionReason?: string } }> } };
-      const content = await client.content(t.contentSid).fetch();
+      const meta = metaTemplates.find((mt) => mt.name === t.metaTemplateName);
+      if (!meta) continue;
 
       let newApproval = t.approval;
       let rejectionReason = t.rejectionReason;
 
-      // Check the content approval status
-      if (content.whatsapp?.approvalStatus === "approved") {
+      if (meta.status === "APPROVED") {
         newApproval = "APPROVED";
         rejectionReason = null;
-      } else if (content.whatsapp?.approvalStatus === "rejected") {
+      } else if (meta.status === "REJECTED") {
         newApproval = "REJECTED";
-        rejectionReason = content.whatsapp?.rejectionReason || "Rejected by WhatsApp";
+        rejectionReason = meta.rejected_reason || "Rejected by WhatsApp";
       }
-      // Other statuses stay PENDING
+      // PENDING and other statuses stay as-is
 
       if (newApproval !== t.approval || rejectionReason !== t.rejectionReason) {
         await prisma.templateTranslation.update({
@@ -128,7 +180,7 @@ export async function syncApprovals(): Promise<void> {
         });
       }
     } catch (e) {
-      // Never throw for one bad row; log and continue
+      // Log but continue - one bad row shouldn't break the whole sync
       log("error", "template_approval_failed", { translationId: t.id });
     }
   }
@@ -148,16 +200,31 @@ export async function updateTranslationText(
     throw new Error("Translation not found");
   }
 
-  // If already approved, cannot edit
+  // If already approved, create a new version instead of editing
   if (translation.approval === "APPROVED") {
-    throw new Error("Cannot edit an approved template. Create a new translation instead.");
+    await prisma.templateTranslation.create({
+      data: {
+        templateId: translation.templateId,
+        language: translation.language,
+        body: newBody,
+        sourceHash: hashSource(newBody),
+        editedByHost: true,
+        approval: "NONE",
+        rejectionReason: null,
+      },
+    });
+    return;
   }
 
   await prisma.templateTranslation.update({
     where: { id: translationId },
     data: {
       body: newBody,
-      contentSid: null,
+      sourceHash: hashSource(newBody),
+      editedByHost: true,
+      metaTemplateName: null,
+      metaTemplateId: null,
+      metaCategory: null,
       approval: "NONE",
       rejectionReason: null,
     },

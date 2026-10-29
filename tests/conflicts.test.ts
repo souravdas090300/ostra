@@ -221,12 +221,20 @@ describe("conflicts", () => {
       expect(missing).toHaveLength(0);
     });
 
-    it("excludes bookings with a phone", () => {
+    it("excludes bookings with a phone and opt-in", () => {
+      const stays = [
+        { ...baseStay("1", "apt-1", "2026-10-31", "2026-11-03"), optedInAt: new Date() },
+      ];
+      const missing = findMissingContacts(stays, "2026-10-31", 7);
+      expect(missing).toHaveLength(0);
+    });
+
+    it("includes bookings with a phone but no opt-in", () => {
       const stays = [
         baseStay("1", "apt-1", "2026-10-31", "2026-11-03"),
       ];
       const missing = findMissingContacts(stays, "2026-10-31", 7);
-      expect(missing).toHaveLength(0);
+      expect(missing).toHaveLength(1);
     });
   });
 

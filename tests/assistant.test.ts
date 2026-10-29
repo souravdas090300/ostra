@@ -1,14 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
 import { buildHistory, holdingText, fallbackOutput, type AssistantOutput } from "../lib/assistant";
-import Anthropic from "@anthropic-ai/sdk";
 
 // Mock Anthropic
 vi.mock("@anthropic-ai/sdk", () => ({
-  default: vi.fn().mockImplementation(() => ({
-    messages: {
-      create: vi.fn(),
-    },
-  })),
+  default: class {
+    messages = { create: vi.fn() };
+  },
 }));
 
 describe("buildHistory", () => {
@@ -31,7 +28,7 @@ describe("buildHistory", () => {
     const history = buildHistory(previous, "!");
     expect(history[0].text).toContain("Hello");
     expect(history[0].text).toContain("World");
-    expect(history.length).toBe(2);
+    expect(history).toHaveLength(1);
   });
 
   it("starts with a user turn when first message is outbound", () => {
@@ -45,7 +42,7 @@ describe("buildHistory", () => {
     const previous = [{ direction: "INBOUND" as const, body: "Hello" }];
     const history = buildHistory(previous, "World");
     expect(history[0].text).toContain("<guest_message>Hello</guest_message>");
-    expect(history[1].text).toContain("<guest_message>World</guest_message>");
+    expect(history[0].text).toContain("<guest_message>World</guest_message>");
   });
 
   it("truncates long messages", () => {

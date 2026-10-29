@@ -6,7 +6,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -17,7 +17,7 @@ model Owner {
   hostLanguage        String      @default("en")
   defaultGuestLanguage String     @default("en")
   fallbackLanguage    String      @default("en")
-  whatsappFrom        String?    @unique
+  whatsappPhoneNumberId String?    @unique
   retentionDays       Int         @default(90)
   passwordChangedAt   DateTime?
   monthlyAiBudgetCents Int        @default(1500)
@@ -131,7 +131,7 @@ model Message {
   escalationReason    String?
   urgent              Boolean  @default(false)
   hasMedia            Boolean  @default(false)
-  twilioSid           String?  @unique
+  metaMessageId       String?  @unique
   deliveryStatus      String?  // queued | sent | delivered | read | failed | undelivered | dry-run
   errorCode           Int?
   scheduledMessageId  String?  @unique
@@ -160,7 +160,7 @@ model ScheduledMessage {
   lastError       String?
   skipReason      String?
   hostSkipped     Boolean  @default(false)
-  twilioSid       String?
+  metaMessageId   String?
   language        String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -193,6 +193,9 @@ model TemplateTranslation {
   editedByHost    Boolean         @default(false)
   approval        String          @default("NONE") // NONE, PENDING, APPROVED, REJECTED
   contentSid      String?         // Twilio Content SID (HX...)
+  metaTemplateName String?       // Meta template name
+  metaTemplateId  String?        // Meta template ID
+  metaCategory    String?        // Meta template category
   rejectionReason String?
   updatedAt       DateTime        @updatedAt
 
@@ -207,7 +210,7 @@ model UnmatchedMessage {
   phone      String
   body       String
   hasMedia   Boolean  @default(false)
-  twilioSid  String   @unique
+  metaMessageId  String   @unique
   receivedAt DateTime @default(now())
   repliedAt  DateTime?
   handledAt  DateTime?
@@ -345,7 +348,7 @@ model LeadMessage {
   originalBody     String?   // the host's own-language text when the sent text is a translation
   language         String?
   hasMedia         Boolean   @default(false)
-  twilioSid        String?   @unique
+  metaMessageId        String?   @unique
   deliveryStatus   String?
   errorCode        Int?
   escalated        Boolean   @default(false)

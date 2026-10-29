@@ -128,26 +128,21 @@ export async function sendMetaTemplateMessage(params: {
 }): Promise<{ messageId: string }> {
   const url = graphApiUrl(`${params.from}/messages`);
 
-  const body: any = {
-    messaging_product: "whatsapp",
-    to: params.to,
-    template: {
-      name: params.templateName,
-      language: { code: params.languageCode },
-    },
-  };
-
-  if (params.components && params.components.length > 0) {
-    body.template.components = params.components;
-  }
-
   const response = await fetch(url, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${params.accessToken}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to: params.to,
+      template: {
+        name: params.templateName,
+        language: { code: params.languageCode },
+        ...(params.components?.length ? { components: params.components } : {}),
+      },
+    }),
   });
 
   if (!response.ok) {
