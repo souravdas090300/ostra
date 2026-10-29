@@ -57,7 +57,7 @@ export async function submitTranslation(translationId: string, ownerId: string):
     include: { template: true },
   });
 
-  if (!translation?.template.ownerId !== ownerId) {
+  if (!translation || translation.template.ownerId !== ownerId) {
     throw new Error("Translation not found");
   }
 
@@ -190,7 +190,7 @@ export async function updateTranslationText(
     include: { template: true },
   });
 
-  if (!translation?.template.ownerId !== ownerId) {
+  if (!translation || translation.template.ownerId !== ownerId) {
     throw new Error("Translation not found");
   }
 
