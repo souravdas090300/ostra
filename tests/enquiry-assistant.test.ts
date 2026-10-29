@@ -198,6 +198,9 @@ describe("E2 - Enquiry Assistant Loop and Output Checks", () => {
       expect(output.escalate).toBe(true);
       expect(output.reason).toContain("Assistant reply blocked");
       expect(recordUsage).not.toHaveBeenCalled();
+      expect(mockMessagesCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ messages: mockInput.history }),
+      );
     });
 
     it("blocks replies with disallowed amounts", () => {
