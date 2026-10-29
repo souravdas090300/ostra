@@ -35,7 +35,7 @@ vi.mock("@/lib/send-time", () => ({
 }));
 
 vi.mock("@/lib/templates", () => ({
-  toTwilioBody: vi.fn(),
+  toMetaBody: vi.fn(),
 }));
 
 vi.mock("@/lib/whatsapp", () => ({
@@ -55,7 +55,7 @@ vi.mock("@/lib/usage", () => ({
 import { prisma } from "@/lib/db";
 import { buildValues, pickTranslation, renderText } from "@/lib/message-render";
 import { inAllowedWindow, latestUseful } from "@/lib/send-time";
-import { toTwilioBody } from "@/lib/templates";
+import { toMetaBody } from "@/lib/templates";
 import { sendWhatsApp, whatsappMode, WhatsAppError } from "@/lib/whatsapp";
 
 describe("send-scheduled", () => {
@@ -63,6 +63,7 @@ describe("send-scheduled", () => {
     vi.clearAllMocks();
     vi.mocked(latestUseful).mockReturnValue(new Date("2099-01-01T00:00:00Z"));
     vi.mocked(monthlyCount).mockResolvedValue(0);
+    vi.mocked(prisma.scheduledMessage.count).mockResolvedValue(0);
   });
 
   it("does nothing outside allowed window", async () => {
@@ -174,7 +175,7 @@ describe("send-scheduled", () => {
       apartmentName: "Seaview",
     });
     vi.mocked(renderText).mockReturnValue("Hello Anna");
-    vi.mocked(toTwilioBody).mockReturnValue({
+    vi.mocked(toMetaBody).mockReturnValue({
       body: "Hello {{1}}",
       order: ["guestName"],
     });
@@ -247,7 +248,7 @@ describe("send-scheduled", () => {
             id: "owner1",
             fallbackLanguage: "en",
             defaultGuestLanguage: "en",
-            templates: [],
+            templates: [{ type: "PRE_ARRIVAL", enabled: true, translations: [] }],
           },
         },
       },
@@ -324,7 +325,7 @@ describe("send-scheduled", () => {
             id: "owner1",
             fallbackLanguage: "en",
             defaultGuestLanguage: "en",
-            templates: [],
+            templates: [{ type: "PRE_ARRIVAL", enabled: true, translations: [] }],
           },
         },
       },
@@ -402,12 +403,14 @@ describe("send-scheduled", () => {
             id: "owner1",
             fallbackLanguage: "en",
             defaultGuestLanguage: "en",
-            templates: [],
+            templates: [{ type: "PRE_ARRIVAL", enabled: true, translations: [] }],
           },
         },
       },
     } as any);
-    vi.mocked(prisma.scheduledMessage.count).mockResolvedValue(100); // At cap
+    vi.mocked(prisma.scheduledMessage.count).mockResolvedValue(
+      Number(process.env.MAX_TEMPLATE_SENDS_PER_DAY ?? 100),
+    );
     vi.mocked(prisma.scheduledMessage.update).mockResolvedValue({
       id: "msg1",
       bookingId: "booking1",
@@ -480,7 +483,7 @@ describe("send-scheduled", () => {
             id: "owner1",
             fallbackLanguage: "en",
             defaultGuestLanguage: "en",
-            templates: [],
+            templates: [{ type: "PRE_ARRIVAL", enabled: true, translations: [] }],
           },
         },
       },
@@ -496,7 +499,7 @@ describe("send-scheduled", () => {
     });
     vi.mocked(buildValues).mockReturnValue({ guestName: "Anna" });
     vi.mocked(renderText).mockReturnValue("Hello Anna");
-    vi.mocked(toTwilioBody).mockReturnValue({
+    vi.mocked(toMetaBody).mockReturnValue({
       body: "Hello {{1}}",
       order: ["guestName"],
     });
@@ -578,7 +581,7 @@ describe("send-scheduled", () => {
             id: "owner1",
             fallbackLanguage: "en",
             defaultGuestLanguage: "en",
-            templates: [],
+            templates: [{ type: "PRE_ARRIVAL", enabled: true, translations: [] }],
           },
         },
       },
@@ -594,7 +597,7 @@ describe("send-scheduled", () => {
     });
     vi.mocked(buildValues).mockReturnValue({ guestName: "Anna" });
     vi.mocked(renderText).mockReturnValue("Hello Anna");
-    vi.mocked(toTwilioBody).mockReturnValue({
+    vi.mocked(toMetaBody).mockReturnValue({
       body: "Hello {{1}}",
       order: ["guestName"],
     });
