@@ -1,12 +1,10 @@
 import { prisma } from "./db";
 import { buildValues, pickTranslation, renderText } from "./message-render";
 import { inAllowedWindow, latestUseful } from "./send-time";
-import { toTwilioBody } from "./templates";
+import { toMetaBody } from "./templates";
 import { WhatsAppError, sendWhatsApp, whatsappMode } from "./whatsapp";
 import { automaticMessagesEnabled } from "./flags";
 import { monthlyCount } from "./usage";
-
-// Note: toTwilioBody function name is legacy; it builds body params for Meta templates too
 
 const BATCH = 20;
 const MAX_ATTEMPTS = 3;
@@ -131,7 +129,7 @@ async function sendOne(id: string, now: Date, s: SendSummary) {
 
   const values = buildValues(b, apt, picked.translation.language);
   const text = renderText(picked.translation.body, values);
-  const { order } = toTwilioBody(picked.translation.body);
+  const { order } = toMetaBody(picked.translation.body);
   
   // Build Meta template components from body parameters
   const components = order.length > 0
