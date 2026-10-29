@@ -7,13 +7,18 @@ import {
   holdingText,
   type EnquiryOutput,
 } from "@/lib/enquiry-assistant";
-import { unsupportedContacts } from "@/lib/guards";
 import { unsupportedAmounts } from "@/lib/enquiry-guards";
 import { runTool } from "@/lib/enquiry-tools";
 import { assistantEnabled } from "@/lib/flags";
 import { assertAiBudget, recordUsage, BudgetExceededError } from "@/lib/usage";
 
-vi.mock("@anthropic-ai/sdk");
+const mockMessagesCreate = vi.hoisted(() => vi.fn());
+
+vi.mock("@anthropic-ai/sdk", () => ({
+  default: class {
+    messages = { create: mockMessagesCreate };
+  },
+}));
 vi.mock("@/lib/enquiry-guards");
 vi.mock("@/lib/enquiry-tools");
 vi.mock("@/lib/flags");
@@ -167,18 +172,32 @@ describe("E2 - Enquiry Assistant Loop and Output Checks", () => {
   });
 
   describe("output validation", () => {
-    it("detects replies with disallowed links", () => {
-      const mockResponse = {
-        language: "en",
-        reply: "Click here: https://example.com",
-        escalate: false,
-        urgent: false,
-        reason: "",
-        host_summary: "Guest asked for info",
-        opt_out: false,
-      };
+    it("blocks an AI reply containing a disallowed link", async () => {
+      vi.mocked(assistantEnabled).mockReturnValue(true);
+      vi.mocked(assertAiBudget).mockResolvedValue(undefined);
+      mockMessagesCreate.mockResolvedValue({
+        usage: { input_tokens: 10, output_tokens: 5 },
+        content: [{
+          type: "tool_use",
+          name: "respond",
+          input: {
+            language: "en",
+            reply: "Click here: https://example.com",
+            escalate: false,
+            urgent: false,
+            reason: "",
+            host_summary: "Guest asked for information",
+            opt_out: false,
+          },
+        }],
+      });
 
-      expect(unsupportedContacts(mockResponse.reply, "")).toBe("link");
+      const output = await answerEnquiry(mockInput);
+
+      expect(output.reply).toBe(holdingText("en"));
+      expect(output.escalate).toBe(true);
+      expect(output.reason).toContain("Assistant reply blocked");
+      expect(recordUsage).not.toHaveBeenCalled();
     });
 
     it("blocks replies with disallowed amounts", () => {
