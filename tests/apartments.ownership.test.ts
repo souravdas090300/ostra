@@ -29,8 +29,8 @@ vi.mock("next/cache", () => ({
 
 describe("Apartment ownership tests", () => {
   vi.setConfig({ testTimeout: 10000 });
-  let ownerA: { id: string; email: string };
-  let ownerB: { id: string; email: string };
+  let ownerA: Awaited<ReturnType<typeof prisma.owner.create>>;
+  let ownerB: Awaited<ReturnType<typeof prisma.owner.create>>;
   let apartmentA: { id: string };
 
   beforeEach(async () => {
@@ -81,10 +81,7 @@ describe("Apartment ownership tests", () => {
 
   it("owner B cannot update owner A's apartment", async () => {
     const { requireOwner } = await import("@/lib/auth");
-    vi.mocked(requireOwner).mockResolvedValue({
-      user: { id: ownerB.id, email: ownerB.email, hostLanguage: "en", defaultGuestLanguage: "en", name: "Owner B" },
-      expires: new Date().toISOString(),
-    } as any);
+    vi.mocked(requireOwner).mockResolvedValue(ownerB);
 
     const { updateApartment } = await import("@/app/(app)/apartments/actions");
 
@@ -113,10 +110,7 @@ describe("Apartment ownership tests", () => {
 
   it("owner A can update their own apartment", async () => {
     const { requireOwner } = await import("@/lib/auth");
-    vi.mocked(requireOwner).mockResolvedValue({
-      user: { id: ownerA.id, email: ownerA.email, hostLanguage: "en", defaultGuestLanguage: "en", name: "Owner A" },
-      expires: new Date().toISOString(),
-    } as any);
+    vi.mocked(requireOwner).mockResolvedValue(ownerA);
 
     const { updateApartment } = await import("@/app/(app)/apartments/actions");
 
@@ -146,10 +140,7 @@ describe("Apartment ownership tests", () => {
 
   it("owner B cannot delete owner A's apartment", async () => {
     const { requireOwner } = await import("@/lib/auth");
-    vi.mocked(requireOwner).mockResolvedValue({
-      user: { id: ownerB.id, email: ownerB.email, hostLanguage: "en", defaultGuestLanguage: "en", name: "Owner B" },
-      expires: new Date().toISOString(),
-    } as any);
+    vi.mocked(requireOwner).mockResolvedValue(ownerB);
 
     const { deleteApartment } = await import("@/app/(app)/apartments/actions");
 
@@ -164,10 +155,7 @@ describe("Apartment ownership tests", () => {
 
   it("owner A can delete their own apartment", async () => {
     const { requireOwner } = await import("@/lib/auth");
-    vi.mocked(requireOwner).mockResolvedValue({
-      user: { id: ownerA.id, email: ownerA.email, hostLanguage: "en", defaultGuestLanguage: "en", name: "Owner A" },
-      expires: new Date().toISOString(),
-    } as any);
+    vi.mocked(requireOwner).mockResolvedValue(ownerA);
 
     const { deleteApartment } = await import("@/app/(app)/apartments/actions");
 
@@ -182,10 +170,7 @@ describe("Apartment ownership tests", () => {
 
   it("owner B cannot add feed to owner A's apartment", async () => {
     const { requireOwner } = await import("@/lib/auth");
-    vi.mocked(requireOwner).mockResolvedValue({
-      user: { id: ownerB.id, email: ownerB.email, hostLanguage: "en", defaultGuestLanguage: "en", name: "Owner B" },
-      expires: new Date().toISOString(),
-    } as any);
+    vi.mocked(requireOwner).mockResolvedValue(ownerB);
 
     const { addFeed } = await import("@/app/(app)/apartments/actions");
 
@@ -204,10 +189,7 @@ describe("Apartment ownership tests", () => {
 
   it("owner A can add feed to their apartment", async () => {
     const { requireOwner } = await import("@/lib/auth");
-    vi.mocked(requireOwner).mockResolvedValue({
-      user: { id: ownerA.id, email: ownerA.email, hostLanguage: "en", defaultGuestLanguage: "en", name: "Owner A" },
-      expires: new Date().toISOString(),
-    } as any);
+    vi.mocked(requireOwner).mockResolvedValue(ownerA);
 
     const { addFeed } = await import("@/app/(app)/apartments/actions");
 
@@ -237,10 +219,7 @@ describe("Apartment ownership tests", () => {
     });
 
     const { requireOwner } = await import("@/lib/auth");
-    vi.mocked(requireOwner).mockResolvedValue({
-      user: { id: ownerB.id, email: ownerB.email, hostLanguage: "en", defaultGuestLanguage: "en", name: "Owner B" },
-      expires: new Date().toISOString(),
-    } as any);
+    vi.mocked(requireOwner).mockResolvedValue(ownerB);
 
     const { removeFeed } = await import("@/app/(app)/apartments/actions");
 
@@ -264,10 +243,7 @@ describe("Apartment ownership tests", () => {
     });
 
     const { requireOwner } = await import("@/lib/auth");
-    vi.mocked(requireOwner).mockResolvedValue({
-      user: { id: ownerA.id, email: ownerA.email, hostLanguage: "en", defaultGuestLanguage: "en", name: "Owner A" },
-      expires: new Date().toISOString(),
-    } as any);
+    vi.mocked(requireOwner).mockResolvedValue(ownerA);
 
     const { removeFeed } = await import("@/app/(app)/apartments/actions");
 
@@ -293,10 +269,7 @@ describe("Apartment ownership tests", () => {
     }
 
     const { requireOwner } = await import("@/lib/auth");
-    vi.mocked(requireOwner).mockResolvedValue({
-      user: { id: ownerA.id, email: ownerA.email, hostLanguage: "en", defaultGuestLanguage: "en", name: "Owner A" },
-      expires: new Date().toISOString(),
-    } as any);
+    vi.mocked(requireOwner).mockResolvedValue(ownerA);
 
     const { addFeed } = await import("@/app/(app)/apartments/actions");
 
@@ -310,10 +283,7 @@ describe("Apartment ownership tests", () => {
 
   it("rejects unsafe feed URLs", async () => {
     const { requireOwner } = await import("@/lib/auth");
-    vi.mocked(requireOwner).mockResolvedValue({
-      user: { id: ownerA.id, email: ownerA.email, hostLanguage: "en", defaultGuestLanguage: "en", name: "Owner A" },
-      expires: new Date().toISOString(),
-    } as any);
+    vi.mocked(requireOwner).mockResolvedValue(ownerA);
 
     const { addFeed } = await import("@/app/(app)/apartments/actions");
 
@@ -327,10 +297,7 @@ describe("Apartment ownership tests", () => {
 
   it("apartment form preserves typed values on validation error", async () => {
     const { requireOwner } = await import("@/lib/auth");
-    vi.mocked(requireOwner).mockResolvedValue({
-      user: { id: ownerA.id, email: ownerA.email, hostLanguage: "en", defaultGuestLanguage: "en", name: "Owner A" },
-      expires: new Date().toISOString(),
-    } as any);
+    vi.mocked(requireOwner).mockResolvedValue(ownerA);
 
     const { updateApartment } = await import("@/app/(app)/apartments/actions");
 

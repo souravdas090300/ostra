@@ -32,10 +32,8 @@ describe("hashPhone", () => {
     const phone = "+35679123456";
     const hash = hashPhone(phone);
     expect(hash).not.toBe(phone);
-    expect(hash).not.toContain("+");
-    expect(hash).not.toContain("3");
-    expect(hash).not.toContain("5");
-    expect(hash).not.toContain("6");
+    expect(hash).not.toContain(phone);
+    expect(hash).toMatch(/^[a-f0-9]{64}$/);
   });
 
   it("normalizes to lowercase", () => {

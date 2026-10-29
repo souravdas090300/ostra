@@ -14,7 +14,6 @@ import { assistantEnabled } from "@/lib/flags";
 import { assertAiBudget, recordUsage, BudgetExceededError } from "@/lib/usage";
 
 vi.mock("@anthropic-ai/sdk");
-vi.mock("@/lib/guards");
 vi.mock("@/lib/enquiry-guards");
 vi.mock("@/lib/enquiry-tools");
 vi.mock("@/lib/flags");
@@ -84,7 +83,9 @@ describe("E2 - Enquiry Assistant Loop and Output Checks", () => {
       const longMessage = "A".repeat(2000);
       const history = buildEnquiryHistory([], longMessage);
 
-      expect(history[0].text).toHaveLength(1025); // 1000 + tags
+      expect(history[0].text).toHaveLength(
+        "<guest_message>".length + 1000 + "</guest_message>".length,
+      );
     });
   });
 
@@ -166,9 +167,7 @@ describe("E2 - Enquiry Assistant Loop and Output Checks", () => {
   });
 
   describe("output validation", () => {
-    it("blocks replies with disallowed links", () => {
-      vi.mocked(unsupportedContacts).mockReturnValue("http://example.com");
-
+    it("detects replies with disallowed links", () => {
       const mockResponse = {
         language: "en",
         reply: "Click here: https://example.com",
@@ -179,11 +178,7 @@ describe("E2 - Enquiry Assistant Loop and Output Checks", () => {
         opt_out: false,
       };
 
-      // This would be caught in the actual assistant flow
-      expect(unsupportedContacts).toHaveBeenCalledWith(
-        mockResponse.reply,
-        "",
-      );
+      expect(unsupportedContacts(mockResponse.reply, "")).toBe("link");
     });
 
     it("blocks replies with disallowed amounts", () => {
