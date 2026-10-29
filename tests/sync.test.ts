@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { syncFeed, syncAllFeeds } from "@/lib/sync";
 import { rescheduleBookings } from "@/lib/schedule";
 import { readFileSync } from "fs";
+import { cleanupDatabase } from "./test-helpers";
 import { join } from "path";
 import bcrypt from "bcryptjs";
 
@@ -24,11 +25,7 @@ describe("sync integration tests", () => {
   let feed: { id: string };
 
   beforeEach(async () => {
-    // Clean up database
-    await prisma.booking.deleteMany();
-    await prisma.calendarFeed.deleteMany();
-    await prisma.apartment.deleteMany();
-    await prisma.owner.deleteMany();
+    await cleanupDatabase();
 
     // Clear mocks
     vi.clearAllMocks();

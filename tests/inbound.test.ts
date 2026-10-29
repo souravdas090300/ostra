@@ -4,6 +4,7 @@ import { processInbound } from "../lib/inbound";
 import { sendWhatsApp } from "../lib/whatsapp";
 import { answerGuest } from "../lib/assistant";
 import { notifyHost } from "../lib/notify";
+import { cleanupDatabase } from "./test-helpers";
 
 // Mock external dependencies
 vi.mock("../lib/whatsapp");
@@ -12,12 +13,7 @@ vi.mock("../lib/notify");
 
 describe("processInbound", () => {
   beforeEach(async () => {
-    // Clean up test data
-    await prisma.message.deleteMany({});
-    await prisma.unmatchedMessage.deleteMany({});
-    await prisma.booking.deleteMany({});
-    await prisma.apartment.deleteMany({});
-    await prisma.owner.deleteMany({});
+    await cleanupDatabase();
   });
 
   afterEach(async () => {
