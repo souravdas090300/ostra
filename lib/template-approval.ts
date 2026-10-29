@@ -11,13 +11,12 @@ const TEMPLATE_CATEGORY: Record<string, string> = {
 };
 
 const SAMPLE: Record<string, string> = {
-  guestName: "John",
-  checkIn: "2026-10-30",
-  checkOut: "2026-11-02",
-  apartmentName: "Sunset Villa",
-  address: "123 Main Street",
-  wifi: "sunset2024",
-  code: "1234",
+  guestName: "Anna",
+  apartmentName: "Seaview Apartment",
+  checkInDate: "10 January 2026",
+  checkInTime: "14:00",
+  checkOutTime: "11:00",
+  reviewUrl: "https://example.com/review",
 };
 
 /**
