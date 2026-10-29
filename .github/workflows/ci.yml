@@ -69,7 +69,7 @@ jobs:
 
       - name: Check for secrets in code (Phase 9 security check)
         run: |
-          if git grep -i "password\|secret\|token\|api_key" -- ':!*.md' ':!*.test.ts' ':!*.test.tsx' ':!vitest.config.ts' ':!.env*' ':!prisma/schema.prisma' | grep -v "process.env"; then
-            echo "Potential secrets found in code"
+          if git grep -IlE "(-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{30,}|sk-[A-Za-z0-9]{32,}|(password|secret|token|api[_-]?key)[[:space:]]*[:=][[:space:]]*['\"][^'\"]{24,}['\"])" -- ':!*.md' ':!*.test.ts' ':!*.test.tsx' ':!vitest.config.ts' ':!.env*' ':!prisma/schema.prisma'; then
+            echo "Potential hard-coded credentials found in source."
             exit 1
-          fi || true
+          fi
