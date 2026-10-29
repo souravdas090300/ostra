@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { TEMPLATE_VARS, fillTemplate, DEFAULT_TEMPLATES } from "@/lib/templates";
-import { validateTemplate } from "@/lib/templates";
+import { TEMPLATE_VARS, fillTemplate, DEFAULT_TEMPLATES, validateTemplate } from "@/lib/templates";
 import type { Language } from "@/lib/languages";
 
 type MessageTemplate = {
@@ -94,7 +93,6 @@ export default function MessagesSettings({
             category={templateCategory[type]}
             hostLanguage={owner.hostLanguage}
             languages={languages}
-            defaultTemplates={DEFAULT_TEMPLATES}
           />
         );
       })}
@@ -114,7 +112,6 @@ function TemplateCard({
   category: "UTILITY" | "MARKETING";
   hostLanguage: string;
   languages: Language[];
-  defaultTemplates: Record<string, string>;
 }) {
   const router = useRouter();
   const [body, setBody] = useState(template.body);

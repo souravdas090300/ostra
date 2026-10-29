@@ -57,7 +57,7 @@ export async function submitTranslation(translationId: string, ownerId: string):
     include: { template: true },
   });
 
-  if (!translation || translation.template.ownerId !== ownerId) {
+  if (!translation?.template.ownerId !== ownerId) {
     throw new Error("Translation not found");
   }
 
@@ -141,6 +141,7 @@ export async function syncApprovals(): Promise<void> {
   const result = await response.json();
   const metaTemplates = result.data || [];
 
+  const updates = [];
   for (const t of pending) {
     try {
       if (!t.metaTemplateName) continue;
@@ -161,18 +162,22 @@ export async function syncApprovals(): Promise<void> {
       // PENDING and other statuses stay as-is
 
       if (newApproval !== t.approval || rejectionReason !== t.rejectionReason) {
-        await prisma.templateTranslation.update({
-          where: { id: t.id },
-          data: {
-            approval: newApproval,
-            rejectionReason,
-          },
-        });
+        updates.push(
+          prisma.templateTranslation.update({
+            where: { id: t.id },
+            data: {
+              approval: newApproval,
+              rejectionReason,
+            },
+          })
+        );
       }
     } catch (e) {
+      // Log but continue - one bad row shouldn't break the whole sync
       log("error", "template_approval_failed", { translationId: t.id });
     }
   }
+  await Promise.all(updates);
 }
 
 export async function updateTranslationText(
@@ -185,7 +190,7 @@ export async function updateTranslationText(
     include: { template: true },
   });
 
-  if (!translation || translation.template.ownerId !== ownerId) {
+  if (!translation?.template.ownerId !== ownerId) {
     throw new Error("Translation not found");
   }
 

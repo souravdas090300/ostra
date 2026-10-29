@@ -1,4 +1,4 @@
-import { after, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { handleMetaPayload } from "@/lib/meta-webhook";
 import { verifyMetaWebhookSignature } from "@/lib/meta-whatsapp";
 
