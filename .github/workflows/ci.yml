@@ -33,9 +33,13 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
+          cache: "npm"
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
 
       - name: Prepare test database
         run: npx prisma migrate deploy
@@ -46,20 +50,8 @@ jobs:
       - name: Run typecheck
         run: npm run typecheck
 
-      - name: Generate Prisma Client
-        run: npx prisma generate
-        env:
-          DATABASE_URL: postgresql://ostra:ostra_test_password@localhost:5432/ostra_test
-
-      - name: Run database migrations
-        run: npx prisma migrate deploy
-        env:
-          DATABASE_URL: postgresql://ostra:ostra_test_password@localhost:5432/ostra_test
-
       - name: Run tests
         run: npm run test
-        env:
-          DATABASE_URL: postgresql://ostra:ostra_test_password@localhost:5432/ostra_test
 
       - name: Build
         run: npm run build
@@ -69,7 +61,10 @@ jobs:
 
       - name: Check for secrets in code (Phase 9 security check)
         run: |
-          if git grep -IlE "(-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{30,}|sk-[A-Za-z0-9]{32,}|(password|secret|token|api[_-]?key)[[:space:]]*[:=][[:space:]]*['\"][^'\"]{24,}['\"])" -- ':!*.md' ':!*.test.ts' ':!*.test.tsx' ':!vitest.config.ts' ':!.env*' ':!prisma/schema.prisma'; then
-            echo "Potential hard-coded credentials found in source."
+          set -e
+          MATCHES=$(git grep -IlE "(-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{30,}|sk-[A-Za-z0-9]{32,}|(password|secret|token|api[_-]?key)[[:space:]]*[:=][[:space:]]*['\"][^'\"]{24,}['\"])" -- ':!*.md' ':!*.test.ts' ':!*.test.tsx' ':!vitest.config.ts' ':!.env*' ':!prisma/schema.prisma' || true)
+          if [ -n "$MATCHES" ]; then
+            echo "Potential hard-coded credentials found in:"
+            echo "$MATCHES"
             exit 1
           fi
