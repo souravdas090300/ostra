@@ -1,6 +1,6 @@
 import { prisma } from "./db";
 
-type UsageKind = "AI_REPLY" | "AI_TRANSLATE" | "AI_TEMPLATE" | "WA_TEMPLATE" | "WA_FREEFORM";
+type UsageKind = "AI_REPLY" | "AI_TRANSLATE" | "AI_TEMPLATE" | "AI_ENQUIRY" | "WA_TEMPLATE" | "WA_FREEFORM";
 import { notifyHost } from "./notify";
 
 const monthStart = (d = new Date()) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
@@ -20,7 +20,7 @@ export async function recordUsage(ownerId: string, kind: UsageKind, tokens?: { i
 /** Estimated AI cost this month in euro cents, from tokens and the prices in the environment. */
 export async function monthlyAiCostCents(ownerId: string, now = new Date()): Promise<number> {
   const rows = await prisma.usageDaily.findMany({
-    where: { ownerId, day: { gte: monthStart(now) }, kind: { in: ["AI_REPLY", "AI_TRANSLATE", "AI_TEMPLATE"] } },
+    where: { ownerId, day: { gte: monthStart(now) }, kind: { in: ["AI_REPLY", "AI_TRANSLATE", "AI_TEMPLATE", "AI_ENQUIRY"] } },
     select: { inputTokens: true, outputTokens: true },
   });
   const inTok = rows.reduce((n, r) => n + r.inputTokens, 0), outTok = rows.reduce((n, r) => n + r.outputTokens, 0);
