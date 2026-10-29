@@ -203,9 +203,9 @@ function TemplateCard({
             </div>
           )}
           <div className="mt-2 flex flex-wrap gap-2">
-            {allowedVars.map((v) => (
+            {allowedVars.map((v, i) => (
               <button
-                key={v}
+                key={`${v}-${i}`}
                 type="button"
                 onClick={() => insertVariable(v)}
                 className="text-xs bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded"
@@ -217,8 +217,8 @@ function TemplateCard({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Preview</label>
-          <div className="bg-gray-50 p-3 rounded text-sm border">
+          <span className="block text-sm font-medium text-gray-700 mb-2">Preview</span>
+          <div className="bg-gray-50 p-3 rounded text-sm border" role="status" aria-live="polite">
             {preview}
           </div>
         </div>
