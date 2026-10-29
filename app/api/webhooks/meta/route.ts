@@ -16,7 +16,7 @@ export function GET(req: Request) {
 
 export function validSignature(raw: string, header: string | null): boolean {
   const appSecret = process.env.META_APP_SECRET;
-  if (!appSecret) return false;
+  if (!appSecret || !header) return false;
   return verifyMetaWebhookSignature(raw, header, appSecret);
 }
 

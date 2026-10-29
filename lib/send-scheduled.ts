@@ -6,6 +6,8 @@ import { WhatsAppError, sendWhatsApp, whatsappMode } from "./whatsapp";
 import { automaticMessagesEnabled } from "./flags";
 import { monthlyCount } from "./usage";
 
+// Note: toTwilioBody function name is legacy; it builds body params for Meta templates too
+
 const BATCH = 20;
 const MAX_ATTEMPTS = 3;
 const STUCK_MS = 15 * 60_000;

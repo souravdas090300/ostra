@@ -53,13 +53,16 @@ export function validateTemplate(type: MessageType, body: string): string[] {
 }
 
 /** {{guestName}} -> {{1}} by order of first appearance. `order` maps numbers back to names. */
-export function toTwilioBody(body: string): { body: string; order: string[] } {
+export function toMetaBody(body: string): { body: string; order: string[] } {
   const order = extractVars(body);
   return {
     body: body.replace(VAR_RE, (_m, name: string) => `{{${order.indexOf(name) + 1}}}`),
     order,
   };
 }
+
+// Legacy alias for backward compatibility
+export const toTwilioBody = toMetaBody;
 
 export const fillTemplate = (body: string, values: Record<string, string>): string =>
   body.replace(VAR_RE, (_m, name: string) => values[name] ?? "");
