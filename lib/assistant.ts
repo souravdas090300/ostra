@@ -78,8 +78,8 @@ type Stored = { direction: "INBOUND" | "OUTBOUND"; body: string };
 export function buildHistory(previous: Stored[], current: string): ChatTurn[] {
   const turns: ChatTurn[] = [];
   const push = (role: ChatTurn["role"], text: string) => {
-    const last = turns[turns.length - 1];
-    if (last && last.role === role) last.content += `\n${text}`;
+    const last = turns.at(-1);
+    if (last?.role === role) last.content += `\n${text}`;
     else turns.push({ role, content: text });
   };
   for (const m of previous) {
@@ -88,7 +88,7 @@ export function buildHistory(previous: Stored[], current: string): ChatTurn[] {
     else push("assistant", body);
   }
   push("user", `<guest_message>${current.slice(0, TURN_MAX)}</guest_message>`);
-  if (turns[0].role === "assistant")
+  if (turns[0]?.role === "assistant")
     turns.unshift({ role: "user", content: "(The conversation started with the host's automatic message.)" });
   return turns;
 }
@@ -104,14 +104,14 @@ export async function answerGuest(input: AnswerInput): Promise<AssistantOutput> 
       system: buildSystemPrompt(input),
       tools: [RESPOND_TOOL],
       tool_choice: { type: "tool", name: "respond" },
-      messages: input.history.map((t) => ({ role: t.role, content: t.text })),
+      messages: input.history.map((t) => ({ role: t.role, content: t.content })),
     });
   } catch {
     throw new AssistantError("The AI service is unavailable.");
   }
   const block = res.content.find((c) => c.type === "tool_use");
-  const parsed = block && block.type === "tool_use" ? outputSchema.safeParse(block.input) : null;
-  if (!parsed || !parsed.success) throw new AssistantError("The AI returned an unusable answer.");
+  const parsed = block?.type === "tool_use" ? outputSchema.safeParse(block.input) : null;
+  if (!parsed?.success) throw new AssistantError("The AI returned an unusable answer.");
   const o = parsed.data;
 
   const usage = {
