@@ -20,14 +20,23 @@ describe("buildHistory", () => {
     expect(history[2].role).toBe("user");
   });
 
+  it("uses content field (not text) for Anthropic SDK compatibility", () => {
+    const previous = [
+      { direction: "INBOUND" as const, body: "Hello" },
+      { direction: "OUTBOUND" as const, body: "Hi there" },
+    ];
+    const history = buildHistory(previous, "Goodbye");
+    expect(history.every(m => 'content' in m && !('text' in m))).toBe(true);
+  });
+
   it("merges consecutive guest messages", () => {
     const previous = [
       { direction: "INBOUND" as const, body: "Hello" },
       { direction: "INBOUND" as const, body: "World" },
     ];
     const history = buildHistory(previous, "!");
-    expect(history[0].text).toContain("Hello");
-    expect(history[0].text).toContain("World");
+    expect(history[0].content).toContain("Hello");
+    expect(history[0].content).toContain("World");
     expect(history).toHaveLength(1);
   });
 

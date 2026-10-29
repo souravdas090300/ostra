@@ -69,6 +69,15 @@ describe("E2 - Enquiry Assistant Loop and Output Checks", () => {
       expect(history[2].role).toBe("user");
     });
 
+    it("uses content field (not text) for Anthropic SDK compatibility", () => {
+      const previous = [
+        { direction: "INBOUND" as const, body: "Hello" },
+        { direction: "OUTBOUND" as const, body: "Hi there" },
+      ];
+      const history = buildEnquiryHistory(previous, "Is it free?");
+      expect(history.every(m => 'content' in m && !('text' in m))).toBe(true);
+    });
+
     it("wraps guest messages in tags", () => {
       const history = buildEnquiryHistory([], "Hello");
 

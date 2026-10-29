@@ -7,7 +7,7 @@ import { unsupportedContacts } from "./guards";
 const client = new Anthropic({ timeout: 25_000, maxRetries: 1 });
 export class AssistantError extends Error {}
 
-export type ChatTurn = { role: "user" | "assistant"; text: string };
+export type ChatTurn = { role: "user" | "assistant"; content: string };
 export type AssistantOutput = {
   language: string | null;
   reply: string;
@@ -79,8 +79,8 @@ export function buildHistory(previous: Stored[], current: string): ChatTurn[] {
   const turns: ChatTurn[] = [];
   const push = (role: ChatTurn["role"], text: string) => {
     const last = turns[turns.length - 1];
-    if (last && last.role === role) last.text += `\n${text}`;
-    else turns.push({ role, text });
+    if (last && last.role === role) last.content += `\n${text}`;
+    else turns.push({ role, content: text });
   };
   for (const m of previous) {
     const body = m.body.slice(0, TURN_MAX);
@@ -89,7 +89,7 @@ export function buildHistory(previous: Stored[], current: string): ChatTurn[] {
   }
   push("user", `<guest_message>${current.slice(0, TURN_MAX)}</guest_message>`);
   if (turns[0].role === "assistant")
-    turns.unshift({ role: "user", text: "(The conversation started with the host's automatic message.)" });
+    turns.unshift({ role: "user", content: "(The conversation started with the host's automatic message.)" });
   return turns;
 }
 
