@@ -48,7 +48,10 @@ describe("schedule", () => {
         sourceHash: "abc123",
         editedByHost: false,
         approval: "NONE",
+        contentSid: null,
         metaTemplateName: null,
+        metaTemplateId: null,
+        metaCategory: null,
         rejectionReason: null,
         updatedAt: new Date(),
       });
@@ -110,7 +113,10 @@ describe("schedule", () => {
         sourceHash: "abc123",
         editedByHost: false,
         approval: "NONE",
+        contentSid: null,
         metaTemplateName: null,
+        metaTemplateId: null,
+        metaCategory: null,
         rejectionReason: null,
         updatedAt: new Date(),
       });

@@ -27,7 +27,7 @@ describe("whatsapp-sandbox (real implementation)", () => {
       });
 
       process.env.WHATSAPP_MODE = originalMode;
-      expect(result.id).toBeNull();
+      expect(result.sid).toBeNull();
       expect(fetchSpy).not.toHaveBeenCalled();
     });
 
@@ -42,7 +42,7 @@ describe("whatsapp-sandbox (real implementation)", () => {
       });
 
       process.env.WHATSAPP_MODE = originalMode;
-      expect(result.id).toBeNull();
+      expect(result.sid).toBeNull();
       expect(fetchSpy).not.toHaveBeenCalled();
     });
 
@@ -57,7 +57,7 @@ describe("whatsapp-sandbox (real implementation)", () => {
       });
 
       process.env.WHATSAPP_MODE = originalMode;
-      expect(result.id).toBeNull();
+      expect(result.sid).toBeNull();
       expect(fetchSpy).not.toHaveBeenCalled();
     });
   });
