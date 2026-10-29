@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { prisma } from "@/lib/db";
 import bcrypt from "bcryptjs";
+import { cleanupDatabase } from "./test-helpers";
 
 // Mock auth module
 vi.mock("@/lib/auth", () => ({
@@ -34,11 +35,7 @@ describe("Apartment ownership tests", () => {
   let apartmentA: { id: string };
 
   beforeEach(async () => {
-    // Clean up database
-    await prisma.booking.deleteMany();
-    await prisma.calendarFeed.deleteMany();
-    await prisma.apartment.deleteMany();
-    await prisma.owner.deleteMany();
+    await cleanupDatabase();
 
     // Create two owners
     const passwordHash = await bcrypt.hash("password123", 10);

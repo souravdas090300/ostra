@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { prisma } from "@/lib/db";
 import { getExampleNumber, type CountryCode } from "libphonenumber-js/mobile";
+import { cleanupDatabase } from "./test-helpers";
 import {
   normalisePhone,
   formatPhone,
@@ -381,11 +382,7 @@ describe("booking actions (database)", () => {
   let apartmentA: { id: string };
 
   beforeEach(async () => {
-    // Clean up database
-    await prisma.booking.deleteMany();
-    await prisma.calendarFeed.deleteMany();
-    await prisma.apartment.deleteMany();
-    await prisma.owner.deleteMany();
+    await cleanupDatabase();
 
     // Create two owners
     const passwordHash = await (await import("bcryptjs")).default.hash("password123", 10);
