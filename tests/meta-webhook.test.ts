@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { GET, POST } from "@/app/api/webhooks/meta/route";
 
 // Mock meta-whatsapp
@@ -28,6 +28,16 @@ import { handleMetaPayload } from "@/lib/meta-webhook";
 describe("meta webhook", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv("META_APP_SECRET", "test-secret");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.stubEnv("META_APP_SECRET", "test-secret");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   describe("GET - subscription handshake", () => {
@@ -44,7 +54,7 @@ describe("meta webhook", () => {
     });
 
     it("returns 200 with challenge for correct token", () => {
-      process.env.META_WEBHOOK_VERIFY_TOKEN = "correct-token";
+      vi.stubEnv("META_WEBHOOK_VERIFY_TOKEN", "correct-token");
       const request = new Request("http://localhost/api/webhooks/meta?hub.mode=subscribe&hub.verify_token=correct-token&hub.challenge=test123");
       const response = GET(request);
       expect(response.status).toBe(200);

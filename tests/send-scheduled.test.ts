@@ -1,12 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { sendDueMessages } from "@/lib/send-scheduled";
+import { monthlyCount } from "@/lib/usage";
+
+const { mockQueryRaw } = vi.hoisted(() => ({
+  mockQueryRaw: vi.fn(),
+}));
 
 // Mock dependencies
 vi.mock("@/lib/db", () => ({
   prisma: {
+    $queryRaw: mockQueryRaw,
     scheduledMessage: {
       updateMany: vi.fn(),
-      $queryRaw: vi.fn(),
       findUniqueOrThrow: vi.fn(),
       update: vi.fn(),
       count: vi.fn(),
@@ -17,9 +22,6 @@ vi.mock("@/lib/db", () => ({
     $transaction: vi.fn(),
   },
 }));
-
-// Need to mock $queryRaw at the module level
-const mockQueryRaw = vi.mocked(prisma.$queryRaw);
 
 vi.mock("@/lib/message-render", () => ({
   buildValues: vi.fn(),
@@ -46,6 +48,10 @@ vi.mock("@/lib/whatsapp", () => ({
   },
 }));
 
+vi.mock("@/lib/usage", () => ({
+  monthlyCount: vi.fn(),
+}));
+
 import { prisma } from "@/lib/db";
 import { buildValues, pickTranslation, renderText } from "@/lib/message-render";
 import { inAllowedWindow, latestUseful } from "@/lib/send-time";
@@ -55,6 +61,8 @@ import { sendWhatsApp, whatsappMode, WhatsAppError } from "@/lib/whatsapp";
 describe("send-scheduled", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(latestUseful).mockReturnValue(new Date("2099-01-01T00:00:00Z"));
+    vi.mocked(monthlyCount).mockResolvedValue(0);
   });
 
   it("does nothing outside allowed window", async () => {
@@ -63,7 +71,8 @@ describe("send-scheduled", () => {
     const summary = await sendDueMessages();
 
     expect(summary).toEqual({ claimed: 0, sent: 0, skipped: 0, failed: 0, retried: 0 });
-    expect(prisma.scheduledMessage.updateMany).not.toHaveBeenCalled();
+    expect(prisma.scheduledMessage.updateMany).toHaveBeenCalledTimes(1);
+    expect(mockQueryRaw).not.toHaveBeenCalled();
   });
 
   it("marks stuck SENDING messages as FAILED", async () => {
