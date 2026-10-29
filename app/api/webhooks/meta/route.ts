@@ -15,7 +15,9 @@ export function GET(req: Request) {
 }
 
 export function validSignature(raw: string, header: string | null): boolean {
-  return verifyMetaWebhookSignature(header, raw);
+  const appSecret = process.env.META_APP_SECRET;
+  if (!appSecret) return false;
+  return verifyMetaWebhookSignature(raw, header, appSecret);
 }
 
 export async function POST(req: Request) {
@@ -25,9 +27,10 @@ export async function POST(req: Request) {
   }
   let payload: unknown;
   try { payload = JSON.parse(raw); } catch { return new NextResponse(null, { status: 200 }); }
-  after(async () => {
-    try { await handleMetaPayload(payload); }
-    catch { /* reportError(e, { tags: { job: "meta-webhook" } }): never include the payload */ }
-  });
+  
+  // Process immediately, not in after() to avoid scope issues
+  try { await handleMetaPayload(payload); }
+  catch { /* reportError(e, { tags: { job: "meta-webhook" } }): never include the payload */ }
+  
   return new NextResponse(null, { status: 200 });     // acknowledge fast, Meta retries on failures
 }

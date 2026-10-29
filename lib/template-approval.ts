@@ -1,10 +1,7 @@
 import { prisma } from "./db";
 import { validateTemplate, toTwilioBody } from "./templates";
 import { whatsappMode } from "./whatsapp";
-import twilio from "twilio";
 import { log } from "./log";
-
-const getClient = () => twilio(process.env.TWILIO_ACCOUNT_SID!, process.env.TWILIO_AUTH_TOKEN!);
 
 /**
  * Map Ostra language codes to WhatsApp locale codes.
@@ -53,26 +50,12 @@ export async function submitTranslation(translationId: string, ownerId: string):
   const locale = toWhatsAppLocale(translation.language);
 
   try {
-    // Create content in Twilio
-    const client = getClient() as unknown as { content: { create: (data: unknown) => Promise<{ sid: string }> } };
-    const content = await client.content.create({
-      friendlyName: `ostra_${translation.template.type}_${translation.language}_${translation.sourceHash.slice(0, 8)}`,
-      language: locale,
-      variables: order.map(() => ({
-        type: "text",
-        default_value: "Sample",
-      })),
-      types: {
-        "twilio/text": {
-          body,
-        },
-      },
-    });
-
+    // TODO: Implement Meta template submission via Graph API
+    // For now, mark as PENDING with placeholder
     await prisma.templateTranslation.update({
       where: { id: translationId },
       data: {
-        metaTemplateName: content.sid,
+        metaTemplateName: `pending_${translation.template.type}_${translation.language}`,
         approval: "PENDING",
       },
     });
@@ -102,31 +85,9 @@ export async function syncApprovals(): Promise<void> {
     try {
       if (!t.metaTemplateName) continue;
 
-      const client = getClient() as unknown as { content: (sid: string) => { fetch: () => Promise<{ whatsapp?: { approvalStatus?: string; rejectionReason?: string } }> } };
-      const content = await client.content(t.metaTemplateName).fetch();
-
-      let newApproval = t.approval;
-      let rejectionReason = t.rejectionReason;
-
-      // Check the content approval status
-      if (content.whatsapp?.approvalStatus === "approved") {
-        newApproval = "APPROVED";
-        rejectionReason = null;
-      } else if (content.whatsapp?.approvalStatus === "rejected") {
-        newApproval = "REJECTED";
-        rejectionReason = content.whatsapp?.rejectionReason || "Rejected by WhatsApp";
-      }
-      // Other statuses stay PENDING
-
-      if (newApproval !== t.approval || rejectionReason !== t.rejectionReason) {
-        await prisma.templateTranslation.update({
-          where: { id: t.id },
-          data: {
-            approval: newApproval,
-            rejectionReason,
-          },
-        });
-      }
+      // TODO: Implement Meta template approval check via Graph API
+      // For now, keep PENDING status
+      continue;
     } catch (e) {
       // Never throw for one bad row; log and continue
       log("error", "template_approval_failed", { translationId: t.id });
