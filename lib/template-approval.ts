@@ -2,6 +2,7 @@ import { prisma } from "./db";
 import { validateTemplate, toMetaBody, hashSource } from "./templates";
 import { whatsappMode } from "./whatsapp";
 import { log } from "./log";
+import { z } from "zod";
 
 const TEMPLATE_CATEGORY: Record<string, string> = {
   PRE_ARRIVAL: "MARKETING",
@@ -137,14 +138,24 @@ export async function syncApprovals(): Promise<void> {
     return;
   }
 
-  const result = await response.json();
-  const metaTemplates = result.data || [];
+  const result = z.object({
+    data: z.array(z.object({
+      name: z.string(),
+      status: z.string(),
+      rejected_reason: z.string().optional(),
+    }).passthrough()).optional(),
+  }).safeParse(await response.json());
+  if (!result.success) {
+    log("error", "template_sync_invalid_response", {});
+    return;
+  }
+  const metaTemplates = result.data.data ?? [];
 
   for (const t of pending) {
     try {
       if (!t.metaTemplateName) continue;
 
-      const meta = metaTemplates.find((mt: any) => mt.name === t.metaTemplateName);
+      const meta = metaTemplates.find((mt) => mt.name === t.metaTemplateName);
       if (!meta) continue;
 
       let newApproval = t.approval;

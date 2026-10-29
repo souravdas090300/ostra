@@ -41,7 +41,7 @@ describe("E2 - Enquiry Assistant Loop and Output Checks", () => {
     today: "2026-10-25",
     knownLanguage: "en",
     apartmentNames: ["Apartment A", "Apartment B"],
-    history: [{ role: "user", text: "<guest_message>Is it free 10-12 March for 2 people?</guest_message>" }],
+    history: [{ role: "user" as const, content: "<guest_message>Is it free 10-12 March for 2 people?</guest_message>" }],
     allowedText: "Test apartment info",
     ctx: mockCtx,
   };
@@ -72,8 +72,8 @@ describe("E2 - Enquiry Assistant Loop and Output Checks", () => {
     it("wraps guest messages in tags", () => {
       const history = buildEnquiryHistory([], "Hello");
 
-      expect(history[0].text).toContain("<guest_message>");
-      expect(history[0].text).toContain("</guest_message>");
+      expect(history[0].content).toContain("<guest_message>");
+      expect(history[0].content).toContain("</guest_message>");
     });
 
     it("handles assistant-only start", () => {
@@ -81,14 +81,14 @@ describe("E2 - Enquiry Assistant Loop and Output Checks", () => {
       const history = buildEnquiryHistory(previous, "Hello");
 
       expect(history[0].role).toBe("user");
-      expect(history[0].text).toContain("The conversation started with the host's automatic message");
+      expect(history[0].content).toContain("The conversation started with the host's automatic message");
     });
 
     it("truncates messages to 1000 characters", () => {
       const longMessage = "A".repeat(2000);
       const history = buildEnquiryHistory([], longMessage);
 
-      expect(history[0].text).toHaveLength(
+      expect(history[0].content).toHaveLength(
         "<guest_message>".length + 1000 + "</guest_message>".length,
       );
     });

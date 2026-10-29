@@ -9,6 +9,7 @@ import {
 } from "@/lib/validation";
 import { syncFeed } from "@/lib/sync";
 import { rescheduleBookings } from "@/lib/schedule";
+import type { AvailabilityResult } from "@/lib/availability-core";
 
 export type FormState =
   | { error?: string; fieldErrors?: Record<string, string[] | undefined>; ok?: boolean; submitted?: Record<string, string> }
@@ -161,7 +162,7 @@ export async function addRate(apartmentId: string, _prev: FormState, formData: F
   const apartment = await prisma.apartment.findFirst({
     where: { id: apartmentId, ownerId: session.id },
     include: { _count: { select: { rates: true } } },
-  }) as any;
+  });
   if (!apartment) notFound();
   if (apartment._count.rates >= 100) return { error: "Maximum 100 rates per apartment.", submitted };
 
@@ -177,7 +178,7 @@ export async function addRate(apartmentId: string, _prev: FormState, formData: F
   const endDate = new Date(endDateStr);
   const minNights = minNightsStr ? Number(minNightsStr) : null;
 
-  await (prisma as any).rate.create({
+  await prisma.rate.create({
     data: {
       apartmentId,
       startDate,
@@ -195,7 +196,7 @@ export async function updateRate(rateId: string, _prev: FormState, formData: For
   const session = await requireOwner();
   const submitted = echo(formData);
 
-  const rate = await (prisma as any).rate.findFirst({
+  const rate = await prisma.rate.findFirst({
     where: { id: rateId, apartment: { ownerId: session.id } },
   });
   if (!rate) notFound();
@@ -212,7 +213,7 @@ export async function updateRate(rateId: string, _prev: FormState, formData: For
   const endDate = new Date(endDateStr);
   const minNights = minNightsStr ? Number(minNightsStr) : null;
 
-  await (prisma as any).rate.update({
+  await prisma.rate.update({
     where: { id: rateId },
     data: {
       startDate,
@@ -228,11 +229,11 @@ export async function updateRate(rateId: string, _prev: FormState, formData: For
 
 export async function deleteRate(rateId: string): Promise<FormState> {
   const session = await requireOwner();
-  const rate = await (prisma as any).rate.findFirst({
+  const rate = await prisma.rate.findFirst({
     where: { id: rateId, apartment: { ownerId: session.id } },
   });
   if (!rate) notFound();
-  await (prisma as any).rate.delete({ where: { id: rateId } });
+  await prisma.rate.delete({ where: { id: rateId } });
   revalidatePath(`/apartments/${rate.apartmentId}`);
   return { ok: true };
 }
@@ -242,7 +243,7 @@ export async function tryDates(
   checkIn: string,
   checkOut: string,
   guests: number,
-): Promise<{ ok: boolean; result?: any; error?: string }> {
+): Promise<{ ok: boolean; result?: AvailabilityResult; error?: string }> {
   const session = await requireOwner();
   const apartment = await prisma.apartment.findFirst({
     where: { id: apartmentId, ownerId: session.id },

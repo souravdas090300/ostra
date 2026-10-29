@@ -25,6 +25,19 @@ const eslintConfig = [
       "no-console": "off",
     },
   },
+  {
+    files: ["tests/**/*"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+      "no-console": "off",
+    },
+  },
+  {
+    files: ["prisma/seed.ts"],
+    rules: {
+      "no-console": "off",
+    },
+  },
 ];
 
 export default eslintConfig;

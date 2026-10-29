@@ -35,7 +35,7 @@ export function LeadDataProtection({ leadId }: { leadId: string }) {
     <div className="border rounded-lg p-4 space-y-4">
       <h2 className="font-medium">Data Protection</h2>
       <p className="text-sm text-gray-600">
-        You can export or erase this lead's data at any time.
+        You can export or erase this lead&apos;s data at any time.
       </p>
       <div className="flex gap-2">
         <button

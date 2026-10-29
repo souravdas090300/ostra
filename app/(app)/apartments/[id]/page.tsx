@@ -16,7 +16,7 @@ export default async function ApartmentPage({ params }: Readonly<{ params: Promi
   const a = await prisma.apartment.findFirst({
     where: { id, ownerId: session.id },
     include: { feeds: true, exportFeeds: true, rates: true },
-  }) as any;
+  });
   if (!a) notFound();
 
   // Ensure export feeds exist for this apartment
@@ -39,7 +39,7 @@ export default async function ApartmentPage({ params }: Readonly<{ params: Promi
       />
       <RateManager
         apartmentId={a.id}
-        rates={a.rates.map((r: any) => ({
+        rates={a.rates.map((r) => ({
           id: r.id,
           startDate: r.startDate.toISOString(),
           endDate: r.endDate.toISOString(),
@@ -48,12 +48,12 @@ export default async function ApartmentPage({ params }: Readonly<{ params: Promi
         }))}
       />
       <TryDates apartmentId={a.id} />
-      <FeedManager apartmentId={a.id} feeds={a.feeds.map((f: any) => ({
+      <FeedManager apartmentId={a.id} feeds={a.feeds.map((f) => ({
         id: f.id, source: f.source, icalUrl: f.icalUrl, lastSyncAt: f.lastSyncAt?.toISOString() ?? null, lastSuccessAt: f.lastSuccessAt?.toISOString() ?? null, lastError: f.lastError,
       }))} />
       <ExportPanel
         apartmentId={a.id}
-        feeds={a.exportFeeds.map((f: any) => ({
+        feeds={a.exportFeeds.map((f) => ({
           id: f.id,
           target: f.target,
           token: f.token,

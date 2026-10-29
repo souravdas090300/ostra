@@ -181,34 +181,69 @@ const RESPOND = {
   },
 };
 
+const checkAvailabilityInput = z.object({
+  check_in: z.string(),
+  check_out: z.string(),
+  guests: z.number(),
+  apartment_name: z.string().optional(),
+});
+const apartmentInfoInput = z.object({ apartment_name: z.string() });
+const saveLeadDetailsInput = z.object({
+  name: z.string().optional(),
+  check_in: z.string().optional(),
+  check_out: z.string().optional(),
+  guests: z.number().optional(),
+  apartment_name: z.string().optional(),
+});
+const handoffInput = z.object({
+  reason: z.string(),
+  urgent: z.boolean().optional(),
+});
+const doNotContactInput = z.object({});
+
 export const dataTools = [CHECK_AVAILABILITY, GET_APARTMENT_INFO, SAVE_LEAD_DETAILS, HANDOFF_TO_HOST, MARK_DO_NOT_CONTACT];
 export const RESPOND_TOOL = RESPOND;
 
 export async function runTool(
   name: string,
-  input: any,
+  input: unknown,
   ctx: TurnContext,
 ): Promise<string> {
   if (name === "check_availability") {
-    return await runCheckAvailability(input, ctx);
+    const parsed = checkAvailabilityInput.safeParse(input);
+    return parsed.success
+      ? runCheckAvailability(parsed.data, ctx)
+      : JSON.stringify({ error: "Invalid tool input" });
   }
   if (name === "get_apartment_info") {
-    return await runGetApartmentInfo(input, ctx);
+    const parsed = apartmentInfoInput.safeParse(input);
+    return parsed.success
+      ? runGetApartmentInfo(parsed.data, ctx)
+      : JSON.stringify({ error: "Invalid tool input" });
   }
   if (name === "save_lead_details") {
-    return await runSaveLeadDetails(input, ctx);
+    const parsed = saveLeadDetailsInput.safeParse(input);
+    return parsed.success
+      ? runSaveLeadDetails(parsed.data, ctx)
+      : JSON.stringify({ error: "Invalid tool input" });
   }
   if (name === "handoff_to_host") {
-    return await runHandoffToHost(input, ctx);
+    const parsed = handoffInput.safeParse(input);
+    return parsed.success
+      ? runHandoffToHost(parsed.data, ctx)
+      : JSON.stringify({ error: "Invalid tool input" });
   }
   if (name === "mark_do_not_contact") {
-    return await runMarkDoNotContact(input, ctx);
+    const parsed = doNotContactInput.safeParse(input);
+    return parsed.success
+      ? runMarkDoNotContact(parsed.data, ctx)
+      : JSON.stringify({ error: "Invalid tool input" });
   }
   return JSON.stringify({ error: "Unknown tool" });
 }
 
 async function runCheckAvailability(
-  input: any,
+  input: z.infer<typeof checkAvailabilityInput>,
   ctx: TurnContext,
 ): Promise<string> {
   const { check_in, check_out, guests, apartment_name } = input;
@@ -341,7 +376,7 @@ async function runCheckAvailability(
 }
 
 async function runGetApartmentInfo(
-  input: any,
+  input: z.infer<typeof apartmentInfoInput>,
   ctx: TurnContext,
 ): Promise<string> {
   const { apartment_name } = input;
@@ -370,7 +405,7 @@ async function runGetApartmentInfo(
 }
 
 async function runSaveLeadDetails(
-  input: any,
+  input: z.infer<typeof saveLeadDetailsInput>,
   ctx: TurnContext,
 ): Promise<string> {
   const { name, check_in, check_out, guests, apartment_name } = input;
@@ -411,7 +446,7 @@ async function findApartment(ownerId: string, name: string) {
 }
 
 async function runHandoffToHost(
-  input: any,
+  input: z.infer<typeof handoffInput>,
   ctx: TurnContext,
 ): Promise<string> {
   const { reason, urgent } = input;
@@ -431,7 +466,7 @@ async function runHandoffToHost(
 }
 
 async function runMarkDoNotContact(
-  input: any,
+  _input: z.infer<typeof doNotContactInput>,
   ctx: TurnContext,
 ): Promise<string> {
   // Mark the lead as blocked

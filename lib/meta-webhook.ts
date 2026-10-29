@@ -1,6 +1,7 @@
 import { prisma } from "./db";
 import { processInbound } from "./inbound";
 import { log } from "./log";
+import { z } from "zod";
 
 const RANK: Record<string, number> = {
   sent: 1,
@@ -9,49 +10,53 @@ const RANK: Record<string, number> = {
   failed: 4,
 };
 
-type MetaPayload = {
-  entry?: Array<{
-    changes: Array<{
-      field: string;
-      value: any;
-    }>;
-  }>;
-};
-
-type MetaMessage = {
-  id: string;
-  from: string;
-  type: string;
-  text?: { body: string };
-  button?: { text: string };
-  interactive?: {
-    button_reply?: { title: string };
-    list_reply?: { title: string };
-  };
-};
-
-type MetaStatus = {
-  id: string;
-  status: string;
-  errors?: Array<{ code: number }>;
-};
-
-type MetaTemplateStatus = {
-  message_template_id: string;
-  event_type: string;
-  status: string;
-  rejection_reason?: string;
-  category?: string;
-};
+const metaMessageSchema = z.object({
+  id: z.string(),
+  from: z.string(),
+  type: z.string(),
+  text: z.object({ body: z.string() }).optional(),
+  button: z.object({ text: z.string() }).optional(),
+  interactive: z.object({
+    button_reply: z.object({ title: z.string() }).optional(),
+    list_reply: z.object({ title: z.string() }).optional(),
+  }).optional(),
+});
+const metaStatusSchema = z.object({
+  id: z.string(),
+  status: z.string(),
+  errors: z.array(z.object({ code: z.number() })).optional(),
+});
+const metaPayloadSchema = z.object({
+  entry: z.array(z.object({
+    changes: z.array(z.object({ field: z.string(), value: z.unknown() })),
+  })).optional(),
+});
+const messagesValueSchema = z.object({
+  metadata: z.object({ phone_number_id: z.string() }).optional(),
+  messages: z.array(metaMessageSchema).optional(),
+  statuses: z.array(metaStatusSchema).optional(),
+});
+const templateStatusSchema = z.object({
+  message_template_id: z.string(),
+  event_type: z.string(),
+  status: z.string(),
+  rejection_reason: z.string().optional(),
+  category: z.string().optional(),
+});
 
 export async function handleMetaPayload(payload: unknown): Promise<void> {
-  const data = payload as MetaPayload;
+  const parsed = metaPayloadSchema.safeParse(payload);
+  if (!parsed.success) {
+    log("warn", "meta_webhook_invalid_payload", {});
+    return;
+  }
+  const data = parsed.data;
   if (!data.entry) return;
 
   await Promise.all(
     data.entry.map(async (entry) =>
       Promise.all(
-        entry.changes.map(async (change: { field: string; value: any }) => {
+        entry.changes.map(async (change) => {
           const field = change.field;
           const value = change.value;
 
@@ -67,9 +72,17 @@ export async function handleMetaPayload(payload: unknown): Promise<void> {
   );
 }
 
-async function handleMessages(value: any): Promise<void> {
-  const metadata = value.metadata || {};
-  const phoneNumberId = metadata.phone_number_id;
+async function handleMessages(value: unknown): Promise<void> {
+  const parsed = messagesValueSchema.safeParse(value);
+  if (!parsed.success) {
+    log("warn", "meta_webhook_invalid_messages", {});
+    return;
+  }
+  const phoneNumberId = parsed.data.metadata?.phone_number_id;
+  if (!phoneNumberId) {
+    log("warn", "meta_webhook_missing_phone_id", {});
+    return;
+  }
 
   // Find owner by phone number ID
   const owner = await prisma.owner.findUnique({
@@ -81,15 +94,15 @@ async function handleMessages(value: any): Promise<void> {
   }
 
   // Process messages
-  const messages = value.messages || [];
-  await Promise.all(messages.map((message: MetaMessage) => processMetaMessage(message, owner.id, phoneNumberId)));
+  const messages = parsed.data.messages || [];
+  await Promise.all(messages.map((message) => processMetaMessage(message, owner.id, phoneNumberId)));
 
   // Process statuses
-  const statuses = value.statuses || [];
-  await Promise.all(statuses.map((status: MetaStatus) => processMetaStatus(status)));
+  const statuses = parsed.data.statuses || [];
+  await Promise.all(statuses.map((status) => processMetaStatus(status)));
 }
 
-async function processMetaMessage(message: MetaMessage, ownerId: string, phoneNumberId: string): Promise<void> {
+async function processMetaMessage(message: z.infer<typeof metaMessageSchema>, ownerId: string, phoneNumberId: string): Promise<void> {
   const sid = message.id;
   const from = "+" + message.from; // Meta sends digits without the plus sign
   const to = phoneNumberId;
@@ -134,7 +147,7 @@ async function processMetaMessage(message: MetaMessage, ownerId: string, phoneNu
   });
 }
 
-async function processMetaStatus(status: MetaStatus): Promise<void> {
+async function processMetaStatus(status: z.infer<typeof metaStatusSchema>): Promise<void> {
   const sid = status.id;
   const statusValue = status.status; // sent, delivered, read, failed
   const errorCode = status.errors?.[0]?.code;
@@ -178,8 +191,13 @@ async function processMetaStatus(status: MetaStatus): Promise<void> {
   }
 }
 
-async function handleTemplateStatus(value: any): Promise<void> {
-  const templateStatus = value as MetaTemplateStatus;
+async function handleTemplateStatus(value: unknown): Promise<void> {
+  const parsed = templateStatusSchema.safeParse(value);
+  if (!parsed.success) {
+    log("warn", "meta_webhook_invalid_template_status", {});
+    return;
+  }
+  const templateStatus = parsed.data;
   const { message_template_id, event_type, rejection_reason, category } = templateStatus;
 
   if (!message_template_id) return;
