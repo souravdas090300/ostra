@@ -1,11 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { prisma } from "@/lib/db";
+import { cleanupDatabase } from "./test-helpers";
 import { syncFeed } from "@/lib/sync";
 import { buildIcs, selectStays, type ExportStay } from "@/lib/ical-export";
 import { parseFeed, isBlockEvent } from "@/lib/ical";
 import { newExportToken } from "@/lib/export-feeds";
 import { todayMalta, addDays } from "@/lib/dates";
 import bcrypt from "bcryptjs";
+import { cleanupDatabase } from "./test-helpers";
 
 // Mock modules
 vi.mock("@/lib/ical-fetch", () => ({
@@ -25,12 +27,7 @@ describe("ical export/import cycle integration", () => {
   let exportFeed: { id: string; token: string };
 
   beforeEach(async () => {
-    // Clean up database
-    await prisma.booking.deleteMany();
-    await prisma.calendarFeed.deleteMany();
-    await prisma.exportFeed.deleteMany();
-    await prisma.apartment.deleteMany();
-    await prisma.owner.deleteMany();
+    await cleanupDatabase();
 
     // Clear mocks
     vi.clearAllMocks();

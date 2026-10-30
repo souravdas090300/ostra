@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { loadStays, loadCalendarData } from "@/lib/calendar-data";
 import { maltaLocalToUtc, maltaYmd } from "@/lib/time";
 import bcrypt from "bcryptjs";
+import { cleanupDatabase } from "./test-helpers";
 
 describe("calendar-data", () => {
   vi.setConfig({ testTimeout: 10000 });
@@ -12,11 +13,7 @@ describe("calendar-data", () => {
   let apartmentB: { id: string };
 
   beforeEach(async () => {
-    // Clean up database - delete all data first (simplest approach for test isolation)
-    await prisma.booking.deleteMany();
-    await prisma.calendarFeed.deleteMany();
-    await prisma.apartment.deleteMany();
-    await prisma.owner.deleteMany();
+    await cleanupDatabase();
 
     // Create two owners
     const passwordHash = await bcrypt.hash("password123", 10);
