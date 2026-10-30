@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { prisma } from "../lib/db";
 import { runRetention } from "../lib/retention";
+import { cleanupDatabase } from "./test-helpers";
 
 describe("retention", () => {
   let ownerId: string;
@@ -8,6 +9,8 @@ describe("retention", () => {
   let bookingId: string;
 
   beforeEach(async () => {
+    await cleanupDatabase();
+
     const owner = await prisma.owner.create({
       data: {
         email: "retention-test@example.com",
@@ -74,15 +77,7 @@ describe("retention", () => {
   });
 
   afterEach(async () => {
-    await prisma.message.deleteMany({});
-    await prisma.scheduledMessage.deleteMany({});
-    await prisma.booking.deleteMany({});
-    await prisma.apartment.deleteMany({});
-    await prisma.owner.deleteMany({});
-    await prisma.loginAttempt.deleteMany({});
-    await prisma.unmatchedMessage.deleteMany({});
-    await prisma.jobRun.deleteMany({});
-    await prisma.auditLog.deleteMany({});
+    await cleanupDatabase();
   });
 
   it("dry-run counts bookings without deleting", async () => {

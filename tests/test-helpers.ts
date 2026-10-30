@@ -16,19 +16,19 @@ export async function cleanupDatabase() {
   await prisma.lead.deleteMany();
   await prisma.message.deleteMany();
   await prisma.scheduledMessage.deleteMany();
-  await prisma.booking.deleteMany();
-  await prisma.calendarFeed.deleteMany();
+  await prisma.unmatchedMessage.deleteMany();
+  await prisma.templateTranslation.deleteMany();
+  await prisma.messageTemplate.deleteMany();
   await prisma.exportFeed.deleteMany();
+  await prisma.calendarFeed.deleteMany();
+  await prisma.booking.deleteMany();
   await prisma.rate.deleteMany();
   await prisma.apartment.deleteMany();
-  await prisma.messageTemplate.deleteMany();
-  await prisma.templateTranslation.deleteMany();
-  await prisma.unmatchedMessage.deleteMany();
   await prisma.optOut.deleteMany();
-  await prisma.loginAttempt.deleteMany();
-  await prisma.jobRun.deleteMany();
   await prisma.usageDaily.deleteMany();
+  await prisma.loginAttempt.deleteMany();
   await prisma.auditLog.deleteMany();
+  await prisma.jobRun.deleteMany();
   await prisma.owner.deleteMany();
 }
 

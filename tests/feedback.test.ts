@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { prisma } from "../lib/db";
+import { cleanupDatabase } from "./test-helpers";
 
 describe("feedback", () => {
   let ownerId: string;
@@ -10,6 +11,8 @@ describe("feedback", () => {
   let inboundMessageId: string;
 
   beforeEach(async () => {
+    await cleanupDatabase();
+
     const owner = await prisma.owner.create({
       data: {
         email: "feedback-test@example.com",
@@ -77,10 +80,7 @@ describe("feedback", () => {
   });
 
   afterEach(async () => {
-    await prisma.message.deleteMany({});
-    await prisma.booking.deleteMany({});
-    await prisma.apartment.deleteMany({});
-    await prisma.owner.deleteMany({});
+    await cleanupDatabase();
   });
 
   describe("Message feedback fields", () => {
