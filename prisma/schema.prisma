@@ -192,15 +192,16 @@ model TemplateTranslation {
   sourceHash      String          // hash of the host's source text this was made from
   editedByHost    Boolean         @default(false)
   approval        String          @default("NONE") // NONE, PENDING, APPROVED, REJECTED
-  contentSid      String?         // Twilio Content SID (HX...)
   metaTemplateName String?       // Meta template name
   metaTemplateId  String?        // Meta template ID
   metaCategory    String?        // Meta template category
   rejectionReason String?
+  revision        Int             @default(1)
+  createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
-  @@unique([templateId, language])
-  @@index([templateId])
+  @@unique([templateId, language, revision])
+  @@index([templateId, language, createdAt])
 }
 
 model UnmatchedMessage {
@@ -250,6 +251,13 @@ model JobRun {
   summary    String?
 
   @@index([job, startedAt])
+}
+
+model JobLease {
+  job        String   @id
+  leasedUntil DateTime
+
+  @@index([leasedUntil])
 }
 
 model AuditLog {
