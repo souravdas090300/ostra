@@ -18,11 +18,22 @@ export async function ensureDefaultTemplates(ownerId: string, hostLanguage: stri
       update: {},
       create: { ownerId, type, body: DEFAULT_TEMPLATES[type] },
     });
-    await prisma.templateTranslation.upsert({
-      where: { templateId_language: { templateId: t.id, language: hostLanguage } },
-      update: {},
-      create: { templateId: t.id, language: hostLanguage, body: t.body, sourceHash: hashSource(t.body) },
+    const hostTranslation = await prisma.templateTranslation.findFirst({
+      where: { templateId: t.id, language: hostLanguage },
+      orderBy: { revision: "desc" },
+      select: { id: true },
     });
+    if (!hostTranslation) {
+      await prisma.templateTranslation.create({
+        data: {
+          templateId: t.id,
+          language: hostLanguage,
+          body: t.body,
+          sourceHash: hashSource(t.body),
+          revision: 1,
+        },
+      });
+    }
   }
 }
 
@@ -73,8 +84,16 @@ async function rescheduleOne(bookingId: string, now: Date) {
 
   for (const type of TYPES) {
     const template = b.apartment.owner.templates.find((t) => t.type === type);
-    if (!template || !template.enabled) continue;
     const row = b.scheduled.find((s) => s.type === type);
+    if (!template || !template.enabled) {
+      if (row && ["PENDING", "SKIPPED"].includes(row.status) && !row.hostSkipped) {
+        await prisma.scheduledMessage.update({
+          where: { id: row.id },
+          data: { status: "CANCELLED", skipReason: "Template disabled" },
+        });
+      }
+      continue;
+    }
     if (row && (row.status === "SENT" || row.status === "SENDING" || row.hostSkipped)) continue;
 
     const plan =

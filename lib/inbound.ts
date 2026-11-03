@@ -33,7 +33,7 @@ export async function processInbound(i: InboundInput, now = new Date()): Promise
   const owner = await prisma.owner.findUnique({ where: { whatsappPhoneNumberId: to } });
   if (!owner) return;
 
-  // Idempotent: Twilio can deliver the same message more than once.
+  // Idempotent: Meta can deliver the same message more than once.
   if (await prisma.message.findUnique({ where: { metaMessageId: i.sid } })) return;
   if (await prisma.leadMessage.findUnique({ where: { metaMessageId: i.sid } })) return;
   if (await prisma.unmatchedMessage.findUnique({ where: { metaMessageId: i.sid } })) return;
