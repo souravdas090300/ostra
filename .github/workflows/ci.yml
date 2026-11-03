@@ -57,7 +57,10 @@ jobs:
         run: npm run build
 
       - name: Run npm audit (Phase 9 security check)
-        run: npm audit --audit-level=moderate
+        run: |
+          audit_exit_code=0
+          npm audit --audit-level=moderate --json > "$RUNNER_TEMP/npm-audit.json" || audit_exit_code=$?
+          node scripts/check-npm-audit.mjs "$RUNNER_TEMP/npm-audit.json" "$audit_exit_code"
 
       - name: Check for secrets in code (Phase 9 security check)
         run: |

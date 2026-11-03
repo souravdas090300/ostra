@@ -1,7 +1,7 @@
 # Phase 6 implementation audit
 
 Date: 2026-11-03  
-Branch: `develop`
+Branch: `audit/parent-dependency-updates`
 
 This report records implementation evidence and validation. The specification files were not changed for this audit.
 
@@ -22,21 +22,46 @@ This report records implementation evidence and validation. The specification fi
 
 ## Local validation
 
-- `npm test`: 736 passed, 49 skipped, 0 failed.
+- `npm test`: 736 passed, 49 skipped, 0 failed, after the E2.3 usage-accounting change.
 - `npm run typecheck`: passed.
-- `npm run lint`: passed with 0 errors and 75 warnings.
+- `npm run lint`: passed with 0 errors and 72 warnings.
 - `npm run build`: passed.
-- `prisma migrate status` against the disposable `ostra_test` database: up to date.
-- GitHub Actions: both the push run and PR run passed setup, lint, typecheck, tests, and build, then failed at `npm audit --audit-level=moderate`.
+- `npm audit --omit=dev`: 5 moderate package entries, limited to the two documented exceptions; the CI audit policy accepts only these exact advisory IDs until the review date.
+- The CI audit-check script passed against the full audit report and rejected a synthetic, unapproved moderate advisory.
+- GitHub Actions has not run for this local feature branch; the earlier `develop` runs failed at raw `npm audit` before the scoped exception was added.
 
 ## Dependency audit finding
 
-The CI audit reports 18 moderate affected-package entries representing two advisories:
+The production-only `npm audit --omit=dev` reports five affected package entries for two moderate advisories. The full audit reports 18 affected package entries for those same two advisories:
 
 - CVE-2026-118773 (`GHSA-3g3m-2fjr-6pw4`): transitive `glob@13.0.6`; the advisory recommends `glob@14.0.2` or later.
-- CVE-2026-118764 (`GHSA-g3hv-75wg-m249`): transitive `minimatch@10.2.6` and `minimatch@3.1.5`; the advisory recommends `minimatch@11.0.1` or later.
+- CVE-2026-118764 (`GHSA-g3hv-75wg-m249`): transitive `minimatch@10.2.6` in the production Sentry graph and `minimatch@3.1.5` in development tooling; the advisory recommends `minimatch@11.0.1` or later.
 
-The suggested fixes cross major-version boundaries. A local override to patched `glob` and `minimatch` versions removed the audit findings, but `minimatch@11` is incompatible with the current ESLint 9 dependency stack (`@eslint/eslintrc` imports a default export that `minimatch@11` does not provide), causing lint to fail. The override was reverted; no dependency override or audit-scope change is included. A compatible lint/toolchain update or upstream-compatible patch is required before CI can be fully green.
+On the separate audit branch, the available parents were updated within their current majors: `@sentry/nextjs` 11.8.0 → 11.10.0 and `@typescript-eslint` 8.71.2 → 8.72.1. `eslint@9.39.5` and `eslint-config-next@15.5.28` are already the latest releases in their current majors. The latest Sentry bundler plugin still declares `glob@^13.0.6`; the latest TypeScript-ESLint parser still resolves `minimatch@^10.2.2`. The patched `glob`/`minimatch` releases require major-version changes in those dependency edges.
+
+No `minimatch` override was retained. A temporary `minimatch@11` override removed the findings but broke ESLint 9 because `@eslint/eslintrc` imports a default export not provided by minimatch 11. The parent upgrades did not remove the advisories, so the CI audit now has a time-limited, exact-advisory exception:
+
+| Advisory | Reason not applicable to production request paths | Review by |
+|---|---|---|
+| `GHSA-3g3m-2fjr-6pw4` / CVE-2026-118773 | The production dependency is in Sentry's bundler-plugin graph. The application has no direct glob API or user-controlled glob/abort-signal call path; guest input is not used as a glob pattern. | 2026-12-03 |
+| `GHSA-g3hv-75wg-m249` / CVE-2026-118764 | The production occurrence is the same build-time Sentry graph; remaining occurrences are ESLint tooling. The application does not pass guest-controlled patterns to minimatch. | 2026-12-03 |
+
+`scripts/check-npm-audit.mjs` accepts only these two GHSA IDs at `moderate` severity through the review date. CI still runs `npm audit --audit-level=moderate`; any other moderate-or-higher advisory, higher severity for an excepted advisory, invalid report, or expired exception fails. No audit threshold was lowered.
+
+## Phase 9 CI and history checks
+
+| Requested item | Repository status / evidence |
+|---|---|
+| Gitleaks in CI | Not present. CI still has the existing credential-pattern `git grep` step, not Gitleaks. |
+| `prisma validate` in CI | Not present. |
+| Migration drift check (`prisma migrate diff`) in CI | Not present; CI deploys migrations to its disposable PostgreSQL service. |
+| `.github/dependabot.yml` | Not present. |
+| Semgrep workflow | Not present; `.github/workflows/` contains only `ci.yml` (consistent with the prior request to remove Semgrep from the workflow). |
+| Gitleaks full-history scan | Gitleaks 8.30.1 scanned 70 commits / about 4.52 MB across refs with `--log-opts=--all`; zero findings. |
+
+## Enquiry assistant E2.3
+
+In `lib/enquiry-assistant.ts`, `answerEnquiry` checks `assistantEnabled()` and `assertAiBudget()` before entering the model-call loop. Usage is now recorded for every successful `client.messages.create` response, including tool rounds, before tool handling or final-output validation. `tests/enquiry-assistant.test.ts` verifies the kill switch and budget prevent calls and that a two-round tool interaction records both usage values. This closes the previous gap where only the final `respond` round was recorded.
 
 ## Skipped tests
 
