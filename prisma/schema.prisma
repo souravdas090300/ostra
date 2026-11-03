@@ -202,6 +202,7 @@ model TemplateTranslation {
 
   @@unique([templateId, language, revision])
   @@index([templateId, language, createdAt])
+  @@index([templateId])
 }
 
 model UnmatchedMessage {
