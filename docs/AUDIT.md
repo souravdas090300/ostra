@@ -22,7 +22,7 @@ This report records implementation evidence and validation. The specification fi
 
 ## Local validation
 
-- `npm test`: 743 passed, 49 skipped, 0 failed, including audit policy tests and the E2.3 usage-accounting change.
+- `npm test`: three consecutive serial runs each passed with 744 passed, 49 skipped, and 0 failed. The additional test verifies the audit exception uses the system date at expiry.
 - `npm run typecheck`: passed.
 - `npm run lint`: passed with 0 errors and 72 warnings.
 - `npm run build`: passed.
@@ -30,7 +30,7 @@ This report records implementation evidence and validation. The specification fi
 - `prisma migrate diff --from-migrations ... --to-schema-datamodel ... --exit-code`: no difference detected against a disposable PostgreSQL shadow database.
 - `npm audit --omit=dev`: 5 moderate package entries, limited to the two documented exceptions; the CI audit policy accepts only these exact advisory IDs until the review date.
 - The CI audit-check script passed against the full audit report and rejected a synthetic, unapproved moderate advisory.
-- The audit-remediation PR's GitHub CI passed. The separate Phase 9 CI PR is pending its GitHub run.
+- The audit-remediation PR's GitHub CI passed. Phase 9 PR #5 CI and Semgrep passed on commit `b8d8b99`; Semgrep reported zero findings across 233 files with 250 rules.
 
 ## Dependency audit finding
 
@@ -39,7 +39,7 @@ The production-only `npm audit --omit=dev` reports five affected package entries
 - CVE-2026-118773 (`GHSA-3g3m-2fjr-6pw4`): transitive `glob@13.0.6`; the advisory recommends `glob@14.0.2` or later.
 - CVE-2026-118764 (`GHSA-g3hv-75wg-m249`): transitive `minimatch@10.2.6` in the production Sentry graph and `minimatch@3.1.5` in development tooling; the advisory recommends `minimatch@11.0.1` or later.
 
-On the separate audit branch, the available parents were updated within their current majors: `@sentry/nextjs` 11.8.0 → 11.10.0 and `@typescript-eslint` 8.71.2 → 8.72.1. `eslint@9.39.5` and `eslint-config-next@15.5.28` are already the latest releases in their current majors. The latest Sentry bundler plugin still declares `glob@^13.0.6`; the latest TypeScript-ESLint parser still resolves `minimatch@^10.2.2`. The patched `glob`/`minimatch` releases require major-version changes in those dependency edges.
+On the separate audit branch, the available parents were updated within their current majors: `@sentry/nextjs` 11.8.0 → 11.10.0 and `@typescript-eslint` 8.71.2 → 8.72.1. `eslint@9.39.5` and `eslint-config-next@15.5.28` are already the latest releases in their current majors. The latest Sentry bundler plugin still declares `glob@^13.0.6`; the latest TypeScript-ESLint parser still resolves `minimatch@^10.2.2`. `npm audit` offers `@sentry/nextjs@10.76.1` as a fix with `isSemVerMajor: true`, a downgrade from the current v11 line; no patched parent is available within the current Sentry major. The patched `glob`/`minimatch` releases require major-version changes in those dependency edges.
 
 No `minimatch` override was retained. A temporary `minimatch@11` override removed the findings but broke ESLint 9 because `@eslint/eslintrc` imports a default export not provided by minimatch 11. The parent upgrades did not remove the advisories, so the CI audit now has a time-limited, exact-advisory exception:
 
