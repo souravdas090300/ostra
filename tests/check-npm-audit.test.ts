@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { validateAuditReport } from '../scripts/check-npm-audit.mjs';
 
 const APPROVED_ADVISORIES = ['GHSA-3g3m-2fjr-6pw4', 'GHSA-g3hv-75wg-m249'];
@@ -47,6 +47,7 @@ function runCheckerCli(content: string) {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   if (tempDirectory) rmSync(tempDirectory, { recursive: true, force: true });
   tempDirectory = undefined;
 });
@@ -80,6 +81,19 @@ describe('npm audit exception policy', () => {
     expect(() =>
       validateAuditReport(report, 1, new Date('2026-12-03T00:00:00.000Z'))
     ).toThrow(/expire on 2026-12-03/);
+  });
+
+  it('uses the system date to expire exceptions in the CI checker', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-12-03T00:00:00.000Z'));
+
+    const report = makeReport([
+      { id: APPROVED_ADVISORIES[0], severity: 'moderate' },
+    ]);
+
+    expect(() => validateAuditReport(report, 1)).toThrow(
+      /expire on 2026-12-03/
+    );
   });
 
   it.each(['high', 'critical'] as const)(
