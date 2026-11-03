@@ -27,7 +27,16 @@ This report records implementation evidence and validation. The specification fi
 - `npm run lint`: passed with 0 errors and 75 warnings.
 - `npm run build`: passed.
 - `prisma migrate status` against the disposable `ostra_test` database: up to date.
-- GitHub PR/CI: pending push and PR creation.
+- GitHub Actions: both the push run and PR run passed setup, lint, typecheck, tests, and build, then failed at `npm audit --audit-level=moderate`.
+
+## Dependency audit finding
+
+The CI audit reports 18 moderate affected-package entries representing two advisories:
+
+- CVE-2026-118773 (`GHSA-3g3m-2fjr-6pw4`): transitive `glob@13.0.6`; the advisory recommends `glob@14.0.2` or later.
+- CVE-2026-118764 (`GHSA-g3hv-75wg-m249`): transitive `minimatch@10.2.6` and `minimatch@3.1.5`; the advisory recommends `minimatch@11.0.1` or later.
+
+The suggested fixes cross major-version boundaries. A local override to patched `glob` and `minimatch` versions removed the audit findings, but `minimatch@11` is incompatible with the current ESLint 9 dependency stack (`@eslint/eslintrc` imports a default export that `minimatch@11` does not provide), causing lint to fail. The override was reverted; no dependency override or audit-scope change is included. A compatible lint/toolchain update or upstream-compatible patch is required before CI can be fully green.
 
 ## Skipped tests
 
