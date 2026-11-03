@@ -9,21 +9,21 @@ Ostra is a Next.js 15 application using:
 - **Database**: SQLite (dev) / PostgreSQL (production via Neon)
 - **Auth**: Auth.js with credentials provider
 - **AI**: Anthropic Claude for guest responses
-- **Messaging**: Twilio WhatsApp API
+- **Messaging**: Meta WhatsApp Cloud API
 - **Email**: Resend for host notifications
 - **Error Tracking**: Sentry
 - **Hosting**: Vercel
 
 ### Data Flow
 1. **Calendar Sync**: iCal feeds → sync-calendars cron → Booking records
-2. **Scheduled Messages**: send-scheduled cron → Twilio → WhatsApp
-3. **Inbound Messages**: Twilio webhook → AI assistant → WhatsApp reply
+2. **Scheduled Messages**: send-scheduled cron → Meta WhatsApp Cloud API
+3. **Inbound Messages**: Meta webhook → AI assistant → WhatsApp reply
 4. **Escalations**: AI detection → host email → inbox
 5. **Retention**: retention cron → anonymise old guest data
 
 ### Security Layers
 - All `/app/**` and `/api/**` routes require authentication (except webhooks/crons)
-- Webhooks verify signatures (Twilio)
+- Webhooks verify Meta signatures against the raw request body
 - Crons verify `CRON_SECRET` header
 - Login rate limiting with hashed attempts
 - All queries scoped by `ownerId`
@@ -56,10 +56,10 @@ If a deployment causes issues:
 
 ## Secret Rotation
 
-### Twilio
-1. Generate new auth token in Twilio console
-2. Update `TWILIO_AUTH_TOKEN` in environment variables
-3. Redeploy
+### Meta WhatsApp
+1. Rotate the system-user access token in Meta Business settings.
+2. Update `META_ACCESS_TOKEN` and verify `META_APP_SECRET` remains current.
+3. Redeploy, then verify the webhook handshake and one sandbox message.
 
 ### Anthropic
 1. Generate new API key in Anthropic console
@@ -86,16 +86,10 @@ If an export link is leaked or compromised:
 
 ### WhatsApp Messages Not Sending
 
-1. Check `WHATSAPP_MODE`:
-   - `dry-run`: Messages are logged but not sent (for testing)
-   - `sandbox`: Uses Twilio sandbox (for development)
-   - `production`: Sends real messages (requires approved templates)
-
-2. Check Twilio console for errors:
-   - Look for failed message deliveries
-   - Verify the phone number format (E.164: + country code + number)
-
-3. Check scheduled message status in the booking detail page
+1. Check `WHATSAPP_MODE`: dry-run makes no external calls; sandbox uses Meta's test number and the configured recipient allow-list; production uses approved templates.
+2. Check the scheduled message status and error code in the booking detail page.
+3. Confirm `META_API_VERSION`, `META_ACCESS_TOKEN`, and `META_PHONE_NUMBER_ID` are set; template management also needs `META_WABA_ID`.
+4. Check the WhatsApp product's Meta App Dashboard for delivery or template errors.
 
 ### Calendar Sync Failing
 
@@ -109,34 +103,13 @@ If an export link is leaked or compromised:
 2. Check rate limits in booking detail page
 3. Test with the "Test assistant" page
 
-## Twilio Configuration
+## Meta WhatsApp Configuration
 
-### WhatsApp Webhook Setup
-
-1. In the Twilio console, go to Messaging > Settings > WhatsApp sandbox settings (or your WhatsApp sender number)
-2. Set "When a message comes in" to: `${APP_URL}/api/webhooks/twilio`
-3. Method: `POST`
-4. Important: The URL must match exactly with `APP_URL` in your environment variables (no trailing slash)
-5. The webhook validates the `X-Twilio-Signature` header using `TWILIO_AUTH_TOKEN`
-
-### WhatsApp Sender Number
-
-For production:
-1. Apply for a WhatsApp Business Profile through Twilio
-2. Get your sender number approved
-3. Set `TWILIO_WHATSAPP_FROM` to your number (e.g., `whatsapp:+1234567890`)
-4. Submit message templates for approval (pre-arrival, check-in, check-out, review request)
-
-For development:
-- Use the Twilio WhatsApp Sandbox
-- Set `TWILIO_WHATSAPP_FROM=whatsapp:+14155238886` (sandbox number)
-- Set `WHATSAPP_MODE=sandbox`
-
-### Status Callback
-
-The delivery status webhook is at `${APP_URL}/api/webhooks/twilio-status`
-- This is automatically configured in `sendWhatsApp` function
-- Updates message delivery status in the database
+1. Configure the Meta app webhook at `${APP_URL}/api/webhooks/meta`; subscribe to `messages` and `message_template_status_update`.
+2. Set `META_API_VERSION`, `META_ACCESS_TOKEN`, `META_APP_SECRET`, `META_WEBHOOK_VERIFY_TOKEN`, `META_WABA_ID`, and `META_PHONE_NUMBER_ID`.
+3. For sandbox mode, set `META_SANDBOX_ALLOWED_NUMBERS` to comma-separated E.164 test recipients. Messages to other recipients are rejected before any network call.
+4. For production, use a permanent system-user token and a registered, approved sender. Submit each translation for approval in Ostra.
+5. Status webhooks update approval and delivery state; the hourly `sync-templates` cron reconciles template approvals if a webhook is missed.
 
 ## Email Notifications
 
@@ -170,14 +143,10 @@ To enable email notifications for escalations:
 **Symptoms**: Scheduled messages show "FAILED", guests report not receiving messages
 
 **Steps**:
-1. Check `WHATSAPP_MODE`:
-   - `dry-run`: Messages logged but not sent (for testing)
-   - `sandbox`: Uses Twilio sandbox (for development)
-   - `production`: Sends real messages (requires approved templates)
-2. Check Twilio console for errors
-3. Verify phone numbers are in E.164 format (+ country code + number)
-4. Check template approval status in Twilio
-5. Verify status callback is receiving updates
+1. Check `WHATSAPP_MODE` and the recipient allow-list when using sandbox.
+2. Verify phone numbers are in E.164 format (+ country code + number).
+3. Check the Meta App Dashboard and Ostra's template approval/category status.
+4. Confirm the Meta webhook is subscribed and the `sync-templates` cron is healthy.
 
 ### Calendar Sync Failing
 **Symptoms**: Bookings not appearing, apartment page shows sync error
