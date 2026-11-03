@@ -13,7 +13,8 @@ vi.mock("@/lib/db", () => ({
       upsert: vi.fn(),
     },
     templateTranslation: {
-      upsert: vi.fn(),
+      findFirst: vi.fn(),
+      create: vi.fn(),
     },
     scheduledMessage: {
       updateMany: vi.fn(),
@@ -28,6 +29,8 @@ import { prisma } from "@/lib/db";
 describe("schedule", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(prisma.templateTranslation.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.templateTranslation.create).mockResolvedValue({} as any);
   });
 
   describe("ensureDefaultTemplates", () => {
@@ -40,7 +43,7 @@ describe("schedule", () => {
         enabled: true,
         updatedAt: new Date(),
       } as any);
-      vi.mocked(prisma.templateTranslation.upsert).mockResolvedValue({
+      vi.mocked(prisma.templateTranslation.create).mockResolvedValue({
         id: "trans1",
         templateId: "template1",
         language: "en",
@@ -48,18 +51,20 @@ describe("schedule", () => {
         sourceHash: "abc123",
         editedByHost: false,
         approval: "NONE",
-        contentSid: null,
         metaTemplateName: null,
         metaTemplateId: null,
         metaCategory: null,
         rejectionReason: null,
+        revision: 1,
+        createdAt: new Date(),
         updatedAt: new Date(),
       });
 
       await ensureDefaultTemplates("owner1", "en");
 
       expect(prisma.messageTemplate.upsert).toHaveBeenCalledTimes(4); // 4 message types
-      expect(prisma.templateTranslation.upsert).toHaveBeenCalledTimes(4);
+      expect(prisma.templateTranslation.findFirst).toHaveBeenCalledTimes(4);
+      expect(prisma.templateTranslation.create).toHaveBeenCalledTimes(4);
     });
   });
 
@@ -105,7 +110,7 @@ describe("schedule", () => {
         enabled: true,
         updatedAt: new Date(),
       } as any);
-      vi.mocked(prisma.templateTranslation.upsert).mockResolvedValue({
+      vi.mocked(prisma.templateTranslation.create).mockResolvedValue({
         id: "trans1",
         templateId: "template1",
         language: "en",
@@ -113,11 +118,12 @@ describe("schedule", () => {
         sourceHash: "abc123",
         editedByHost: false,
         approval: "NONE",
-        contentSid: null,
         metaTemplateName: null,
         metaTemplateId: null,
         metaCategory: null,
         rejectionReason: null,
+        revision: 1,
+        createdAt: new Date(),
         updatedAt: new Date(),
       });
 

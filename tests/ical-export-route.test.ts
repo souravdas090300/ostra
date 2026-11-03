@@ -5,7 +5,6 @@ import { cleanupDatabase } from "./test-helpers";
 import { buildIcs, selectStays, type ExportStay } from "@/lib/ical-export";
 import { todayMalta, addDays } from "@/lib/dates";
 import bcrypt from "bcryptjs";
-import { cleanupDatabase } from "./test-helpers";
 
 // Mock rate-limit
 vi.mock("@/lib/rate-limit", () => ({

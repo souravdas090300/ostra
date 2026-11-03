@@ -7,6 +7,25 @@ import bcrypt from "bcryptjs";
 // Import auth.config - it uses real prisma, which is fine for these tests
 import { authConfig } from "@/auth.config";
 
+type CredentialsAuthorize = (credentials: Record<string, string>) => Promise<{
+  id: string;
+  email: string;
+  hostLanguage: string;
+  defaultGuestLanguage: string;
+} | null>;
+
+function authorizeCredentials(credentials: Record<string, string>) {
+  const provider = authConfig.providers[0];
+  if (typeof provider === "function" || !provider.options) {
+    throw new Error("Credentials provider options are unavailable.");
+  }
+  const authorize = provider.options.authorize;
+  if (typeof authorize !== "function") {
+    throw new Error("Credentials provider authorize callback is unavailable.");
+  }
+  return (authorize as CredentialsAuthorize)(credentials);
+}
+
 describe("Phase 1 - Authentication (middleware and authorize)", () => {
   beforeEach(async () => {
     await cleanupDatabase();
@@ -21,7 +40,7 @@ describe("Phase 1 - Authentication (middleware and authorize)", () => {
         "/api/auth/callback/credentials",
         "/api/health",
         "/api/cron/sync-calendars",
-        "/api/webhooks/twilio",
+        "/api/webhooks/meta",
         "/api/ical/token123",
         "/monitoring/health",
       ];
@@ -69,16 +88,23 @@ describe("Phase 1 - Authentication (middleware and authorize)", () => {
   });
 
   describe("authorize function (credentials provider)", () => {
-    it.skip("returns owner with correct credentials - TODO: fix PrismaClient global state issue", async () => {
+    it("returns owner with correct credentials", async () => {
       const testPassword = "password123"; // Use the default from createTestOwner
       const owner = await createTestOwner("owner@test.com");
 
+      expect(await prisma.owner.findUnique({ where: { id: owner.id } })).not.toBeNull();
+      expect(await bcrypt.compare(testPassword, owner.passwordHash)).toBe(true);
+      const ownerLookup = vi.spyOn(prisma.owner, "findUnique");
+
       // Use the exact email that was created (includes timestamp)
-      const result = await (authConfig.providers[0] as any).authorize!({
+      const result = await authorizeCredentials({
         email: owner.email,
         password: testPassword,
       });
 
+      expect(ownerLookup).toHaveBeenCalledWith({
+        where: { email: owner.email.toLowerCase() },
+      });
       expect(result).not.toBeNull();
       expect(result?.id).toBe(owner.id);
       expect(result?.email).toBe(owner.email.toLowerCase());
@@ -87,7 +113,7 @@ describe("Phase 1 - Authentication (middleware and authorize)", () => {
     it("returns null with wrong password", async () => {
       const owner = await createTestOwner("owner@test.com");
 
-      const result = await (authConfig.providers[0] as any).authorize!({
+      const result = await authorizeCredentials({
         email: owner.email,
         password: "WrongPassword",
       });
@@ -96,7 +122,7 @@ describe("Phase 1 - Authentication (middleware and authorize)", () => {
     });
 
     it("returns null with unknown email", async () => {
-      const result = await (authConfig.providers[0] as any).authorize!({
+      const result = await authorizeCredentials({
         email: "unknown@test.com",
         password: "password123",
       });
@@ -105,7 +131,7 @@ describe("Phase 1 - Authentication (middleware and authorize)", () => {
     });
 
     it("returns null with malformed input (invalid email)", async () => {
-      const result = await (authConfig.providers[0] as any).authorize!({
+      const result = await authorizeCredentials({
         email: "not-an-email",
         password: "password123",
       });
@@ -114,7 +140,7 @@ describe("Phase 1 - Authentication (middleware and authorize)", () => {
     });
 
     it("returns null with malformed input (empty password)", async () => {
-      const result = await (authConfig.providers[0] as any).authorize!({
+      const result = await authorizeCredentials({
         email: "owner@test.com",
         password: "",
       });

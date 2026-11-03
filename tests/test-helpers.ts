@@ -29,6 +29,7 @@ export async function cleanupDatabase() {
   await prisma.loginAttempt.deleteMany();
   await prisma.auditLog.deleteMany();
   await prisma.jobRun.deleteMany();
+  await prisma.jobLease.deleteMany();
   await prisma.owner.deleteMany();
 }
 

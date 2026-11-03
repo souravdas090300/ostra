@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { prisma } from "../lib/db";
 import { eraseGuestData, collectGuestData } from "../lib/guest-data";
 import { cleanupDatabase } from "./test-helpers";
-import { cleanupDatabase } from "./test-helpers";
 
 describe("guest-data", () => {
   let ownerId: string;

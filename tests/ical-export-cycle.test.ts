@@ -7,7 +7,6 @@ import { parseFeed, isBlockEvent } from "@/lib/ical";
 import { newExportToken } from "@/lib/export-feeds";
 import { todayMalta, addDays } from "@/lib/dates";
 import bcrypt from "bcryptjs";
-import { cleanupDatabase } from "./test-helpers";
 
 // Mock modules
 vi.mock("@/lib/ical-fetch", () => ({
