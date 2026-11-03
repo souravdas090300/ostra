@@ -44,9 +44,13 @@ No `minimatch` override was retained. A temporary `minimatch@11` override remove
 | Advisory | Reason not applicable to production request paths | Review by |
 |---|---|---|
 | `GHSA-3g3m-2fjr-6pw4` / CVE-2026-118773 | The production dependency is in Sentry's bundler-plugin graph. The application has no direct glob API or user-controlled glob/abort-signal call path; guest input is not used as a glob pattern. | 2026-12-03 |
-| `GHSA-g3hv-75wg-m249` / CVE-2026-118764 | The production occurrence is the same build-time Sentry graph; remaining occurrences are ESLint tooling. The application does not pass guest-controlled patterns to minimatch. | 2026-12-03 |
+| `GHSA-g3hv-75wg-m249` / CVE-2026-118764 | The production occurrence is the same Sentry bundler-plugin graph; remaining occurrences are ESLint tooling. The application does not pass guest-controlled patterns to minimatch. | 2026-12-03 |
 
-`scripts/check-npm-audit.mjs` accepts only these two GHSA IDs at `moderate` severity through the review date. CI still runs `npm audit --audit-level=moderate`; any other moderate-or-higher advisory, higher severity for an excepted advisory, invalid report, or expired exception fails. No audit threshold was lowered.
+**Execution context:** `glob` and `minimatch` are not called by Ostra request/runtime code. They occur through Sentry's bundler plugin, which is build-tooling code. The app's `next.config.mjs` does not use `withSentryConfig`, so this plugin path is currently installed transitively but not invoked by this project's Next build. The separate ESLint minimatch copies are development-only.
+
+**Review reminder: 2026-12-03.** Re-run `npm audit`, inspect whether upstream Sentry and TypeScript-ESLint parents have moved to patched dependency ranges, and remove or renew the exception with fresh evidence. The exception expires on this date; it is not an automatic renewal.
+
+`scripts/check-npm-audit.mjs` accepts only these two GHSA IDs at `moderate` severity before the review date. CI still runs `npm audit --audit-level=moderate`; any other moderate-or-higher advisory, higher severity for an excepted advisory, invalid report, or expired exception fails. No audit threshold was lowered.
 
 ## Phase 9 CI and history checks
 
