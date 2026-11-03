@@ -57,7 +57,7 @@ No `minimatch` override was retained. A temporary `minimatch@11` override remove
 | Migration drift check (`prisma migrate diff`) in CI | Not present; CI deploys migrations to its disposable PostgreSQL service. |
 | `.github/dependabot.yml` | Not present. |
 | Semgrep workflow | Not present; `.github/workflows/` contains only `ci.yml` (consistent with the prior request to remove Semgrep from the workflow). |
-| Gitleaks full-history scan | Gitleaks 8.30.1 scanned 70 commits / about 4.52 MB across refs with `--log-opts=--all`; zero findings. |
+| Gitleaks full-history scan | Gitleaks 8.30.1 scanned full history across refs with `--log-opts=--all`; zero findings. |
 
 ## Enquiry assistant E2.3
 
