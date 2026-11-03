@@ -18,9 +18,10 @@ export default async function MessagesSettingsPage() {
     select: {
       fallbackLanguage: true,
       hostLanguage: true,
+      enquiriesEnabled: true,
       templates: {
         include: {
-          translations: true,
+          translations: { orderBy: { revision: "desc" } },
         },
       },
     },
@@ -36,14 +37,25 @@ export default async function MessagesSettingsPage() {
     <div className="space-y-6">
       <h1 className="text-xl font-semibold">Message Templates</h1>
 
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <p className="text-sm text-blue-800">
+      <div
+        role="status"
+        className={`rounded-lg border p-4 ${
+          mode === "production"
+            ? "border-red-200 bg-red-50"
+            : mode === "sandbox"
+              ? "border-amber-200 bg-amber-50"
+              : "border-blue-200 bg-blue-50"
+        }`}
+      >
+        <p className="text-sm">
           <strong>WhatsApp Mode:</strong> {mode}
           {mode === "dry-run" && (
             <span className="ml-2">
-              Messages are recorded but not sent. Set WHATSAPP_MODE to sandbox or production to send real messages.
+              Messages are recorded but not sent.
             </span>
           )}
+          {mode === "sandbox" && <span className="ml-2">Only configured test recipients can be messaged.</span>}
+          {mode === "production" && <span className="ml-2">Live guest messaging is enabled.</span>}
         </p>
       </div>
 
