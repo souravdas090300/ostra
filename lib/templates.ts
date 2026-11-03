@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-type MessageType = "PRE_ARRIVAL" | "CHECK_IN" | "CHECK_OUT" | "REVIEW_REQUEST";
+export type MessageType = "PRE_ARRIVAL" | "CHECK_IN" | "CHECK_OUT" | "REVIEW_REQUEST";
 
 export const TEMPLATE_VARS: Record<MessageType, readonly string[]> = {
   PRE_ARRIVAL: ["guestName", "apartmentName", "checkInDate", "checkInTime"],
@@ -15,6 +15,19 @@ export const TEMPLATE_CATEGORY: Record<MessageType, "UTILITY" | "MARKETING"> = {
   CHECK_OUT: "UTILITY",
   REVIEW_REQUEST: "MARKETING",
 };
+
+const META_TEMPLATE_LOCALES: Record<string, string> = {
+  pt: "pt_PT",
+  nb: "nb",
+};
+
+export function metaTemplateLocale(language: string): string {
+  return META_TEMPLATE_LOCALES[language] ?? language;
+}
+
+export function ostraTemplateLanguage(locale: string): string {
+  return locale === "pt_PT" ? "pt" : locale;
+}
 
 // English defaults. No variable at the very start or end (WhatsApp rejects that), no secrets.
 export const DEFAULT_TEMPLATES: Record<MessageType, string> = {

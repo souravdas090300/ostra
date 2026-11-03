@@ -2,6 +2,7 @@ import { prisma } from "./db";
 import { processInbound } from "./inbound";
 import { log } from "./log";
 import { z } from "zod";
+import { ostraTemplateLanguage } from "./templates";
 
 const RANK: Record<string, number> = {
   sent: 1,
@@ -37,12 +38,16 @@ const messagesValueSchema = z.object({
   statuses: z.array(metaStatusSchema).optional(),
 });
 const templateStatusSchema = z.object({
-  message_template_id: z.string(),
-  event_type: z.string(),
-  status: z.string(),
+  message_template_id: z.string().optional(),
+  message_template_name: z.string().optional(),
+  message_template_language: z.string().optional(),
+  event_type: z.string().optional(),
+  status: z.string().optional(),
   rejection_reason: z.string().optional(),
+  reason: z.string().optional(),
   category: z.string().optional(),
-});
+  new_category: z.string().optional(),
+}).passthrough();
 
 export async function handleMetaPayload(payload: unknown): Promise<void> {
   const parsed = metaPayloadSchema.safeParse(payload);
@@ -60,12 +65,15 @@ export async function handleMetaPayload(payload: unknown): Promise<void> {
           const field = change.field;
           const value = change.value;
 
-          if (field === "messages") {
-            await handleMessages(value);
-          } else if (field === "message_template_status_update") {
-            await handleTemplateStatus(value);
+          try {
+            if (field === "messages") {
+              await handleMessages(value);
+            } else if (field === "message_template_status_update") {
+              await handleTemplateStatus(value);
+            }
+          } catch {
+            log("error", "meta_webhook_change_failed", { status: "change_failed" });
           }
-          // Ignore other fields (phone_number_quality_update, account_update, etc.)
         })
       )
     )
@@ -95,11 +103,27 @@ async function handleMessages(value: unknown): Promise<void> {
 
   // Process messages
   const messages = parsed.data.messages || [];
-  await Promise.all(messages.map((message) => processMetaMessage(message, owner.id, phoneNumberId)));
+  await Promise.all(
+    messages.map(async (message) => {
+      try {
+        await processMetaMessage(message, owner.id, phoneNumberId);
+      } catch {
+        log("error", "meta_webhook_message_failed", { status: "message_failed" });
+      }
+    }),
+  );
 
   // Process statuses
   const statuses = parsed.data.statuses || [];
-  await Promise.all(statuses.map((status) => processMetaStatus(status)));
+  await Promise.all(
+    statuses.map(async (status) => {
+      try {
+        await processMetaStatus(status);
+      } catch {
+        log("error", "meta_webhook_status_failed", { status: "status_failed" });
+      }
+    }),
+  );
 }
 
 async function processMetaMessage(message: z.infer<typeof metaMessageSchema>, ownerId: string, phoneNumberId: string): Promise<void> {
@@ -197,54 +221,69 @@ async function handleTemplateStatus(value: unknown): Promise<void> {
     log("warn", "meta_webhook_invalid_template_status", {});
     return;
   }
-  const templateStatus = parsed.data;
-  const { message_template_id, event_type, rejection_reason, category } = templateStatus;
+  const {
+    message_template_id: id,
+    message_template_name: name,
+    message_template_language: locale,
+    event_type: eventType,
+    status,
+    rejection_reason: rejectionReason,
+    reason,
+    category,
+    new_category: newCategory,
+  } = parsed.data;
+  const nextStatus = (status ?? eventType ?? "").toUpperCase();
+  if (!id && !name) return;
 
-  if (!message_template_id) return;
-
-  // Find template by metaTemplateId, then by metaTemplateName
-  let translation = await prisma.templateTranslation.findFirst({
-    where: { metaTemplateId: message_template_id },
-  });
-
-  translation ??= await prisma.templateTranslation.findFirst({
-    where: { metaTemplateName: message_template_id },
-  });
+  let translation = id
+    ? await prisma.templateTranslation.findFirst({ where: { metaTemplateId: id } })
+    : null;
+  if (!translation && name) {
+    const language = locale ? ostraTemplateLanguage(locale) : undefined;
+    translation = await prisma.templateTranslation.findFirst({
+      where: {
+        metaTemplateName: name,
+        ...(language ? { language } : {}),
+      },
+    });
+  }
 
   if (!translation) return;
 
   let newApproval = translation.approval;
   let newRejectionReason = translation.rejectionReason;
-  let newCategory = translation.metaCategory;
+  const reportedCategory = newCategory ?? category;
+  const assignedCategory =
+    reportedCategory && ["UTILITY", "MARKETING", "AUTHENTICATION"].includes(reportedCategory.toUpperCase())
+      ? reportedCategory.toUpperCase()
+      : translation.metaCategory;
 
   // Handle template status events
-  if (event_type === "APPROVED") {
+  if (nextStatus === "APPROVED") {
     newApproval = "APPROVED";
     newRejectionReason = null;
-  } else if (event_type === "REJECTED") {
+  } else if (nextStatus === "REJECTED") {
     newApproval = "REJECTED";
-    newRejectionReason = rejection_reason || "Rejected by Meta";
-  } else if (event_type === "PAUSED" || event_type === "DISABLED") {
+    newRejectionReason = rejectionReason ?? reason ?? "Rejected by Meta";
+  } else if (nextStatus === "PAUSED" || nextStatus === "DISABLED") {
     newApproval = "NONE"; // Not usable
-  }
-
-  // Update category if provided
-  if (category) {
-    newCategory = category;
+    newRejectionReason = `Template is ${nextStatus.toLowerCase()} by Meta.`;
+  } else if (nextStatus === "PENDING" || nextStatus === "IN_APPEAL") {
+    newApproval = "PENDING";
   }
 
   // Update if anything changed
   if (
     newApproval !== translation.approval ||
     newRejectionReason !== translation.rejectionReason ||
-    newCategory !== translation.metaCategory
+    assignedCategory !== translation.metaCategory
   ) {
     await prisma.templateTranslation.update({
       where: { id: translation.id },
       data: {
         approval: newApproval,
         rejectionReason: newRejectionReason,
-        metaCategory: newCategory,
+        metaCategory: assignedCategory,
       },
     });
   }

@@ -6,7 +6,7 @@
  *
  * Available jobs:
  * - send-scheduled: Send due scheduled WhatsApp messages
- * - sync-templates: Sync template approval status from Twilio
+ * - sync-templates: Sync template approval status from Meta
  * - sync-calendars: Sync calendar feeds (existing Phase 3 job)
  * - weekly-summary: Send weekly summary emails to owners
  * - lead-follow-ups: Send follow-up messages to quiet leads (Phase 12)
