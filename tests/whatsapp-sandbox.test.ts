@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { recordUsage } from "@/lib/usage";
 
 // Import the real implementation (not mocked in setup.ts)
 vi.unmock("@/lib/whatsapp");
@@ -71,31 +70,25 @@ describe("whatsapp-sandbox (real implementation)", () => {
       process.env.WHATSAPP_MODE = "sandbox";
       process.env.META_SANDBOX_ALLOWED_NUMBERS = "+35699999999,+35688888888";
 
-      await expect(
-        sendWhatsApp({
-          to: "+35612345678", // Not in allowed list
-          text: "Test message",
-        })
-      ).rejects.toThrowError(WhatsAppError);
-
-      process.env.WHATSAPP_MODE = originalMode;
-      process.env.META_SANDBOX_ALLOWED_NUMBERS = originalAllowed;
-
-      // Verify it's a permanent SANDBOX error
       try {
-        await sendWhatsApp({
+        const sendPromise = sendWhatsApp({
           to: "+35612345678",
           text: "Test message",
         });
-      } catch (e) {
-        expect(e).toBeInstanceOf(WhatsAppError);
-        const err = e as WhatsAppError;
-        expect(err.permanent).toBe(true);
-        expect(err.kind).toBe("SANDBOX");
-      }
+        await expect(sendPromise).rejects.toBeInstanceOf(WhatsAppError);
+        await expect(sendPromise).rejects.toMatchObject({
+          permanent: true,
+          kind: "SANDBOX",
+        });
 
-      // Critical: fetch was never called (before any network call)
-      expect(fetchSpy).not.toHaveBeenCalled();
+        expect(fetchSpy).not.toHaveBeenCalled();
+      } finally {
+        if (originalMode === undefined) delete process.env.WHATSAPP_MODE;
+        else process.env.WHATSAPP_MODE = originalMode;
+        if (originalAllowed === undefined) delete process.env.META_SANDBOX_ALLOWED_NUMBERS;
+        else process.env.META_SANDBOX_ALLOWED_NUMBERS = originalAllowed;
+        fetchSpy.mockRestore();
+      }
     });
   });
 });

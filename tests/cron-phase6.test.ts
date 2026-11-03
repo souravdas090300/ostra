@@ -119,7 +119,7 @@ describe("cron endpoints (Phase 6)", () => {
     it("returns 200 with correct secret", async () => {
       process.env.CRON_SECRET = "test-secret";
       vi.mocked(cronAuthorized).mockReturnValue(true);
-      vi.mocked(syncApprovals).mockResolvedValue();
+      vi.mocked(syncApprovals).mockResolvedValue({ updated: 0 });
 
       const request = new Request("http://localhost/api/cron/sync-templates", {
         method: "POST",
