@@ -7,28 +7,30 @@ This report records implementation evidence and validation. The specification fi
 
 ## Verification
 
-| Area | Evidence | Result |
-|---|---|---|
-| Meta template request, versioned naming, examples, locale, and category | `lib/template-approval.ts`; PostgreSQL coverage in `tests/template-approval-db.test.ts` | Passed |
-| Approval webhook, polling reconciliation, paused-template send prevention | `lib/meta-webhook.ts`, `lib/template-approval.ts`, `lib/send-scheduled.ts`; `tests/template-approval-db.test.ts` | Passed |
-| Settings server actions and owner scoping | `app/(app)/settings/messages/actions.ts`; `tests/messages-settings-actions-db.test.ts` | Passed |
-| Opt-out persists booking state and a phone hash | `lib/optout.ts`; `tests/phase6-safety-db.test.ts` | Passed against PostgreSQL |
-| Stale `SENDING` row cleanup | `lib/send-scheduled.ts`; `tests/phase6-safety-db.test.ts` | Passed against PostgreSQL |
-| Automatic-message kill switch is read at call time | `lib/flags.ts`, `lib/send-scheduled.ts`; `tests/phase6-safety-db.test.ts` | Passed against PostgreSQL |
-| `JobLease` Prisma model and existing table migration | `prisma/schema.prisma`, `prisma/migrations/20261025_init/migration.sql`; `tests/phase6-safety-db.test.ts` | Passed against PostgreSQL |
-| Previously skipped credential-auth test | `tests/phase1-auth-middleware.test.ts` | Unskipped; passed after calling the configured `options.authorize` callback rather than NextAuth's default provider stub |
-| Inbox token-scan timeout guard | `lib/translate-reply.ts`, `tests/inbox.test.ts` | Replaced the nested token regex scan, which could rescan each long token, with a linear whitespace-token scan; 100,000-character regression test passes. The previously observed suite timeout did not reproduce in isolation; full suite now passes. |
-| Live Meta sender and approval lifecycle | Requires a configured Meta app, WABA, test number, and credentials | Not verified locally |
+| Area                                                                      | Evidence                                                                                                         | Result                                                                                                                                                                                                                                                |
+| ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Meta template request, versioned naming, examples, locale, and category   | `lib/template-approval.ts`; PostgreSQL coverage in `tests/template-approval-db.test.ts`                          | Passed                                                                                                                                                                                                                                                |
+| Approval webhook, polling reconciliation, paused-template send prevention | `lib/meta-webhook.ts`, `lib/template-approval.ts`, `lib/send-scheduled.ts`; `tests/template-approval-db.test.ts` | Passed                                                                                                                                                                                                                                                |
+| Settings server actions and owner scoping                                 | `app/(app)/settings/messages/actions.ts`; `tests/messages-settings-actions-db.test.ts`                           | Passed                                                                                                                                                                                                                                                |
+| Opt-out persists booking state and a phone hash                           | `lib/optout.ts`; `tests/phase6-safety-db.test.ts`                                                                | Passed against PostgreSQL                                                                                                                                                                                                                             |
+| Stale `SENDING` row cleanup                                               | `lib/send-scheduled.ts`; `tests/phase6-safety-db.test.ts`                                                        | Passed against PostgreSQL                                                                                                                                                                                                                             |
+| Automatic-message kill switch is read at call time                        | `lib/flags.ts`, `lib/send-scheduled.ts`; `tests/phase6-safety-db.test.ts`                                        | Passed against PostgreSQL                                                                                                                                                                                                                             |
+| `JobLease` Prisma model and existing table migration                      | `prisma/schema.prisma`, `prisma/migrations/20261025_init/migration.sql`; `tests/phase6-safety-db.test.ts`        | Passed against PostgreSQL                                                                                                                                                                                                                             |
+| Previously skipped credential-auth test                                   | `tests/phase1-auth-middleware.test.ts`                                                                           | Unskipped; passed after calling the configured `options.authorize` callback rather than NextAuth's default provider stub                                                                                                                              |
+| Inbox token-scan timeout guard                                            | `lib/translate-reply.ts`, `tests/inbox.test.ts`                                                                  | Replaced the nested token regex scan, which could rescan each long token, with a linear whitespace-token scan; 100,000-character regression test passes. The previously observed suite timeout did not reproduce in isolation; full suite now passes. |
+| Live Meta sender and approval lifecycle                                   | Requires a configured Meta app, WABA, test number, and credentials                                               | Not verified locally                                                                                                                                                                                                                                  |
 
 ## Local validation
 
-- `npm test`: 736 passed, 49 skipped, 0 failed, after the E2.3 usage-accounting change.
+- `npm test`: three consecutive serial runs each passed with 744 passed, 49 skipped, and 0 failed. The additional test verifies the audit exception uses the system date at expiry.
 - `npm run typecheck`: passed.
 - `npm run lint`: passed with 0 errors and 72 warnings.
 - `npm run build`: passed.
+- `npx prisma validate`: passed.
+- `prisma migrate diff --from-migrations ... --to-schema-datamodel ... --exit-code`: no difference detected against a disposable PostgreSQL shadow database.
 - `npm audit --omit=dev`: 5 moderate package entries, limited to the two documented exceptions; the CI audit policy accepts only these exact advisory IDs until the review date.
 - The CI audit-check script passed against the full audit report and rejected a synthetic, unapproved moderate advisory.
-- GitHub Actions has not run for this local feature branch; the earlier `develop` runs failed at raw `npm audit` before the scoped exception was added.
+- The audit-remediation PR's GitHub CI passed. Phase 9 PR #5 CI and Semgrep passed on commit `b8d8b99`; Semgrep reported zero findings across 233 files with 250 rules.
 
 ## Dependency audit finding
 
@@ -37,14 +39,14 @@ The production-only `npm audit --omit=dev` reports five affected package entries
 - CVE-2026-118773 (`GHSA-3g3m-2fjr-6pw4`): transitive `glob@13.0.6`; the advisory recommends `glob@14.0.2` or later.
 - CVE-2026-118764 (`GHSA-g3hv-75wg-m249`): transitive `minimatch@10.2.6` in the production Sentry graph and `minimatch@3.1.5` in development tooling; the advisory recommends `minimatch@11.0.1` or later.
 
-On the separate audit branch, the available parents were updated within their current majors: `@sentry/nextjs` 11.8.0 → 11.10.0 and `@typescript-eslint` 8.71.2 → 8.72.1. `eslint@9.39.5` and `eslint-config-next@15.5.28` are already the latest releases in their current majors. The latest Sentry bundler plugin still declares `glob@^13.0.6`; the latest TypeScript-ESLint parser still resolves `minimatch@^10.2.2`. The patched `glob`/`minimatch` releases require major-version changes in those dependency edges.
+On the separate audit branch, the available parents were updated within their current majors: `@sentry/nextjs` 11.8.0 → 11.10.0 and `@typescript-eslint` 8.71.2 → 8.72.1. `eslint@9.39.5` and `eslint-config-next@15.5.28` are already the latest releases in their current majors. The latest Sentry bundler plugin still declares `glob@^13.0.6`; the latest TypeScript-ESLint parser still resolves `minimatch@^10.2.2`. `npm audit` offers `@sentry/nextjs@10.76.1` as a fix with `isSemVerMajor: true`, a downgrade from the current v11 line. A trial of that version did not remediate the advisories: `npm audit --omit=dev` still reported six moderate package entries, and `npm ls` still resolved `glob@13.0.6` and `minimatch@10.2.6`. The trial was reverted. No patched parent is currently available within the Sentry 11 line; the exact advisory exceptions remain until review.
 
 No `minimatch` override was retained. A temporary `minimatch@11` override removed the findings but broke ESLint 9 because `@eslint/eslintrc` imports a default export not provided by minimatch 11. The parent upgrades did not remove the advisories, so the CI audit now has a time-limited, exact-advisory exception:
 
-| Advisory | Reason not applicable to production request paths | Review by |
-|---|---|---|
+| Advisory                                | Reason not applicable to production request paths                                                                                                                                                | Review by  |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------- |
 | `GHSA-3g3m-2fjr-6pw4` / CVE-2026-118773 | The production dependency is in Sentry's bundler-plugin graph. The application has no direct glob API or user-controlled glob/abort-signal call path; guest input is not used as a glob pattern. | 2026-12-03 |
-| `GHSA-g3hv-75wg-m249` / CVE-2026-118764 | The production occurrence is the same Sentry bundler-plugin graph; remaining occurrences are ESLint tooling. The application does not pass guest-controlled patterns to minimatch. | 2026-12-03 |
+| `GHSA-g3hv-75wg-m249` / CVE-2026-118764 | The production occurrence is the same Sentry bundler-plugin graph; remaining occurrences are ESLint tooling. The application does not pass guest-controlled patterns to minimatch.               | 2026-12-03 |
 
 **Execution context:** `glob` and `minimatch` are not called by Ostra request/runtime code. They occur through Sentry's bundler plugin, which is build-tooling code. The app's `next.config.mjs` does not use `withSentryConfig`, so this plugin path is currently installed transitively but not invoked by this project's Next build. The separate ESLint minimatch copies are development-only.
 
@@ -54,14 +56,14 @@ No `minimatch` override was retained. A temporary `minimatch@11` override remove
 
 ## Phase 9 CI and history checks
 
-| Requested item | Repository status / evidence |
-|---|---|
-| Gitleaks in CI | Not present. CI still has the existing credential-pattern `git grep` step, not Gitleaks. |
-| `prisma validate` in CI | Not present. |
-| Migration drift check (`prisma migrate diff`) in CI | Not present; CI deploys migrations to its disposable PostgreSQL service. |
-| `.github/dependabot.yml` | Not present. |
-| Semgrep workflow | Not present; `.github/workflows/` contains only `ci.yml` (consistent with the prior request to remove Semgrep from the workflow). |
-| Gitleaks full-history scan | Gitleaks 8.30.1 scanned full history across refs with `--log-opts=--all`; zero findings. |
+| Requested item                                      | Repository status / evidence                                                                                                                                                                                                                                                                                                             |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Gitleaks in CI                                      | Added in the separate Phase 9 CI PR using full checkout history; the existing credential-pattern check remains.                                                                                                                                                                                                                          |
+| `prisma validate` in CI                             | Added after client generation.                                                                                                                                                                                                                                                                                                           |
+| Migration drift check (`prisma migrate diff`) in CI | Added against the migrations directory with a disposable shadow database. Local drift check identified the existing `TemplateTranslation_templateId_idx`; the Prisma schema now declares that existing index.                                                                                                                            |
+| `.github/dependabot.yml`                            | Added weekly npm and GitHub Actions updates with a seven-day cooldown.                                                                                                                                                                                                                                                                   |
+| Semgrep workflow                                    | Added as a separate, initially non-blocking workflow using `p/default`, `p/typescript`, and `p/security-audit` with `--error`. The first run identified missing Dependabot cooldowns; after adding seven-day cooldowns, the rerun scanned 233 files with 250 rules and found zero issues. The scan step remains explicitly non-blocking. |
+| Gitleaks full-history scan                          | Gitleaks 8.30.1 scanned full history across refs with `--log-opts=--all`; zero findings.                                                                                                                                                                                                                                                 |
 
 ## Enquiry assistant E2.3
 
@@ -71,58 +73,58 @@ In `lib/enquiry-assistant.ts`, `answerEnquiry` checks `assistantEnabled()` and `
 
 There were 50 skips before this audit. One auth test has now been enabled and passes; the 49 remaining skips are live LLM-evaluation cases in `tests/llm-eval.test.ts`. `describe.skipIf` disables them unless `RUN_LLM_EVALS=1`; each makes a real Anthropic API call. The test environment has no Anthropic API key, so these remain opt-in rather than being silently enabled or run with fake results.
 
-| File | Test | Skip reason |
-|---|---|---|
+| File                                   | Test                                                        | Skip reason                                                                                                                                                                              |
+| -------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `tests/phase1-auth-middleware.test.ts` | authorize function — returns owner with correct credentials | Formerly skipped because of an assumed Prisma-client issue; resolved by invoking the configured `options.authorize` callback instead of NextAuth's default stub; now enabled and passing |
-| `tests/llm-eval.test.ts` | English — handles Wi-Fi | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | English — handles Door code | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | English — handles Not in information | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | English — handles Date change | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | English — handles Money | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | English — handles Emergency | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | English — handles Prompt injection | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | English — handles Opt-out | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | Italian — handles Wi-Fi | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | Italian — handles Door code | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | Italian — handles Not in information | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | Italian — handles Date change | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | Italian — handles Money | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | Italian — handles Emergency | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | Italian — handles Prompt injection | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | Italian — handles Opt-out | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | German — handles Wi-Fi | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | German — handles Door code | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | German — handles Not in information | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | German — handles Date change | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | German — handles Money | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | German — handles Emergency | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | German — handles Prompt injection | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | German — handles Opt-out | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | French — handles Wi-Fi | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | French — handles Door code | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | French — handles Not in information | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | French — handles Date change | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | French — handles Money | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | French — handles Emergency | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | French — handles Prompt injection | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | French — handles Opt-out | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | Spanish — handles Wi-Fi | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | Spanish — handles Door code | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | Spanish — handles Not in information | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | Spanish — handles Date change | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | Spanish — handles Money | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | Spanish — handles Emergency | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | Spanish — handles Prompt injection | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | Spanish — handles Opt-out | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | Arabic — handles Wi-Fi | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | Arabic — handles Door code | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | Arabic — handles Not in information | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | Arabic — handles Date change | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | Arabic — handles Money | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | Arabic — handles Emergency | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | Arabic — handles Prompt injection | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | Arabic — handles Opt-out | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
-| `tests/llm-eval.test.ts` | handles locked details | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key |
+| `tests/llm-eval.test.ts`               | English — handles Wi-Fi                                     | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | English — handles Door code                                 | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | English — handles Not in information                        | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | English — handles Date change                               | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | English — handles Money                                     | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | English — handles Emergency                                 | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | English — handles Prompt injection                          | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | English — handles Opt-out                                   | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | Italian — handles Wi-Fi                                     | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | Italian — handles Door code                                 | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | Italian — handles Not in information                        | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | Italian — handles Date change                               | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | Italian — handles Money                                     | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | Italian — handles Emergency                                 | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | Italian — handles Prompt injection                          | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | Italian — handles Opt-out                                   | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | German — handles Wi-Fi                                      | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | German — handles Door code                                  | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | German — handles Not in information                         | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | German — handles Date change                                | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | German — handles Money                                      | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | German — handles Emergency                                  | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | German — handles Prompt injection                           | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | German — handles Opt-out                                    | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | French — handles Wi-Fi                                      | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | French — handles Door code                                  | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | French — handles Not in information                         | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | French — handles Date change                                | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | French — handles Money                                      | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | French — handles Emergency                                  | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | French — handles Prompt injection                           | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | French — handles Opt-out                                    | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | Spanish — handles Wi-Fi                                     | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | Spanish — handles Door code                                 | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | Spanish — handles Not in information                        | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | Spanish — handles Date change                               | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | Spanish — handles Money                                     | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | Spanish — handles Emergency                                 | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | Spanish — handles Prompt injection                          | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | Spanish — handles Opt-out                                   | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | Arabic — handles Wi-Fi                                      | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | Arabic — handles Door code                                  | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | Arabic — handles Not in information                         | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | Arabic — handles Date change                                | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | Arabic — handles Money                                      | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | Arabic — handles Emergency                                  | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | Arabic — handles Prompt injection                           | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | Arabic — handles Opt-out                                    | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
+| `tests/llm-eval.test.ts`               | handles locked details                                      | Live Anthropic evaluation; requires `RUN_LLM_EVALS=1` and a real API key                                                                                                                 |
 
 The former auth skip (“returns owner with correct credentials”) is no longer skipped. It now invokes the configured Credentials provider callback, not the default `authorize` stub that always returns `null`, and passes.
 
