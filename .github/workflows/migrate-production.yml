@@ -1,0 +1,44 @@
+name: Production migrate
+
+# Applies Prisma migrations to the production database.
+#
+# DRAFT — gated, not enabled:
+#   * Only runs on push to `main`. Preview branches, Dependabot branches and
+#     pull requests never trigger it.
+#   * The job targets the `production` GitHub Environment. Until you configure
+#     that environment with required reviewers, this workflow cannot be
+#     relied on — create it in Settings > Environments > production and add
+#     yourself as a required reviewer BEFORE merging this file.
+#   * It reads PRODUCTION_DATABASE_URL from environment secrets. The secret
+#     is not set yet, so even an approved run would fail harmlessly.
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    # Protected environment: requires manual approval once configured.
+    environment: production
+    # Extra belt-and-braces: never run for bot actors even on main.
+    if: github.actor != 'dependabot[bot]'
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Apply migrations to production
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
