@@ -13,15 +13,9 @@ export const PROCESSORS: Processor[] = [
     region: "EU (Frankfurt)",
   },
   {
-    name: "Twilio",
-    purpose: "WhatsApp message delivery",
-    dataInvolved: "Guest phone numbers, message content",
-    region: "Global (servers in US and EU)",
-  },
-  {
     name: "Meta (WhatsApp)",
-    purpose: "WhatsApp messaging platform",
-    dataInvolved: "Guest phone numbers, message content (via Twilio)",
+    purpose: "WhatsApp messaging and template management",
+    dataInvolved: "Guest phone numbers and message content",
     region: "Global",
   },
   {

@@ -3,7 +3,7 @@
  * Uses Meta's Graph API for WhatsApp messaging
  */
 
-import crypto from "crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
 export type WhatsAppMode = "dry-run" | "sandbox" | "production";
 
@@ -16,6 +16,18 @@ export class WhatsAppError extends Error {
   constructor(message: string, public permanent: boolean, public code?: number) {
     super(message);
   }
+}
+
+async function graphError(response: Response, fallback: string): Promise<WhatsAppError> {
+  const body = await response.json().catch(() => undefined) as
+    | { error?: { code?: unknown } }
+    | undefined;
+  const code = body?.error?.code;
+  return new WhatsAppError(
+    fallback,
+    response.status >= 400 && response.status < 500 && response.status !== 429,
+    typeof code === "number" ? code : undefined,
+  );
 }
 
 /**
@@ -44,16 +56,23 @@ export type MetaTemplateResponse = {
     id: string;
     name: string;
     status: string;
-    category: string;
     language: string;
+    category?: string;
   }>;
+  paging?: {
+    next?: string;
+    cursors?: { before?: string; after?: string };
+  };
 };
 
 /**
  * Helper to construct Meta Graph API URLs
  */
 const graphApiUrl = (path: string) => {
-  const version = process.env.META_API_VERSION || "v18.0";
+  const version = process.env.META_API_VERSION;
+  if (!version || !/^v\d+\.\d+$/.test(version)) {
+    throw new WhatsAppError("A valid META_API_VERSION is required.", true);
+  }
   return `https://graph.facebook.com/${version}/${path}`;
 };
 
@@ -65,11 +84,11 @@ export function verifyMetaWebhookSignature(
   signature: string,
   appSecret: string
 ): boolean {
-  const expectedSignature = crypto
-    .createHmac("sha256", appSecret)
-    .update(body)
-    .digest("hex");
-  return signature === expectedSignature;
+  const signatureHex = signature.startsWith("sha256=") ? signature.slice(7) : signature;
+  if (!/^[a-f0-9]{64}$/i.test(signatureHex)) return false;
+  const expected = createHmac("sha256", appSecret).update(body, "utf8").digest();
+  const received = Buffer.from(signatureHex, "hex");
+  return received.length === expected.length && timingSafeEqual(received, expected);
 }
 
 /**
@@ -97,12 +116,7 @@ export async function sendMetaTextMessage(params: {
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new WhatsAppError(
-      error.error?.message || "Failed to send message",
-      response.status >= 400 && response.status < 500 && response.status !== 429,
-      response.status
-    );
+    throw await graphError(response, "WhatsApp rejected the message.");
   }
 
   const data: MetaSendMessageResponse = await response.json();
@@ -146,12 +160,7 @@ export async function sendMetaTemplateMessage(params: {
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new WhatsAppError(
-      error.error?.message || "Failed to send template message",
-      response.status >= 400 && response.status < 500 && response.status !== 429,
-      response.status
-    );
+    throw await graphError(response, "WhatsApp rejected the template message.");
   }
 
   const data: MetaSendMessageResponse = await response.json();
@@ -219,12 +228,7 @@ export async function createMetaTemplate(params: {
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new WhatsAppError(
-      error.error?.message || "Failed to create template",
-      response.status >= 400 && response.status < 500 && response.status !== 429,
-      response.status
-    );
+    throw await graphError(response, "Meta rejected the template.");
   }
 
   const data = await response.json();

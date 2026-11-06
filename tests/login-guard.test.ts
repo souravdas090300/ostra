@@ -1,14 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { prisma } from "../lib/db";
 import { isLockedOut, recordAttempt, clientIp } from "../lib/login-guard";
+import { cleanupDatabase } from "./test-helpers";
 
 describe("login guard", () => {
   beforeEach(async () => {
-    await prisma.loginAttempt.deleteMany({});
+    await cleanupDatabase();
   });
 
   afterEach(async () => {
-    await prisma.loginAttempt.deleteMany({});
+    await cleanupDatabase();
   });
 
   it("locks out after 5 failed email attempts", async () => {

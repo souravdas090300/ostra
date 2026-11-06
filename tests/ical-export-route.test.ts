@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { prisma } from "@/lib/db";
 import { newExportToken } from "@/lib/export-feeds";
+import { cleanupDatabase } from "./test-helpers";
 import { buildIcs, selectStays, type ExportStay } from "@/lib/ical-export";
 import { todayMalta, addDays } from "@/lib/dates";
 import bcrypt from "bcryptjs";
@@ -26,11 +27,7 @@ describe("ical export route", () => {
   let bookingComFeed: { id: string; token: string };
 
   beforeEach(async () => {
-    // Clean up database
-    await prisma.booking.deleteMany();
-    await prisma.exportFeed.deleteMany();
-    await prisma.apartment.deleteMany();
-    await prisma.owner.deleteMany();
+    await cleanupDatabase();
 
     // Clear mocks and reset rate limit to allow requests
     vi.clearAllMocks();

@@ -36,6 +36,7 @@ vi.mock("@/lib/send-time", () => ({
 
 vi.mock("@/lib/templates", () => ({
   toMetaBody: vi.fn(),
+  metaTemplateLocale: vi.fn((language: string) => language),
 }));
 
 vi.mock("@/lib/whatsapp", () => ({
@@ -431,6 +432,7 @@ describe("send-scheduled", () => {
 
     const summary = await sendDueMessages();
 
+    expect(summary.retried).toBe(0);
     expect(prisma.scheduledMessage.update).toHaveBeenCalledWith({
       where: { id: "msg1" },
       data: {
@@ -625,6 +627,7 @@ describe("send-scheduled", () => {
 
     const summary = await sendDueMessages();
 
+    expect(sendWhatsApp).toHaveBeenCalledOnce();
     expect(summary.failed).toBe(1);
     expect(prisma.scheduledMessage.update).toHaveBeenCalledWith({
       where: { id: "msg1" },

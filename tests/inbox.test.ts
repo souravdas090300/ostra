@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { windowOpen, windowEnd, resolveGuestLanguage } from "@/lib/reply-window";
 import { rateLimit, resetRateLimits } from "@/lib/rate-limit";
 import { missingTokens } from "@/lib/translate-reply";
@@ -111,5 +111,9 @@ describe("missingTokens", () => {
 
   it("Arabic-Indic digits in the translation are reported as missing", () => {
     expect(missingTokens("Code 1234", "Code ١٢٣٤")).toEqual(["1234"]);
+  });
+
+  it("handles a long token without quadratic backtracking", () => {
+    expect(missingTokens("a".repeat(100_000), "translation")).toEqual([]);
   });
 });

@@ -206,7 +206,10 @@ describe("E2 - Enquiry Assistant Loop and Output Checks", () => {
       expect(output.reply).toBe(holdingText("en"));
       expect(output.escalate).toBe(true);
       expect(output.reason).toContain("Assistant reply blocked");
-      expect(recordUsage).not.toHaveBeenCalled();
+      expect(recordUsage).toHaveBeenCalledWith("owner-1", "AI_ENQUIRY", {
+        input: 10,
+        output: 5,
+      });
       expect(mockMessagesCreate).toHaveBeenCalledWith(
         expect.objectContaining({ messages: mockInput.history }),
       );
@@ -324,6 +327,9 @@ describe("E2 - Enquiry Assistant Loop and Output Checks", () => {
       expect(output.reason).toBe("AI assistant disabled");
       expect(output.usage.input).toBe(0);
       expect(output.usage.output).toBe(0);
+      expect(mockMessagesCreate).not.toHaveBeenCalled();
+      expect(assertAiBudget).not.toHaveBeenCalled();
+      expect(recordUsage).not.toHaveBeenCalled();
     });
 
     it("should return holding reply when budget exceeded", async () => {
@@ -337,19 +343,29 @@ describe("E2 - Enquiry Assistant Loop and Output Checks", () => {
       expect(output.reason).toBe("Monthly AI budget exceeded");
       expect(output.usage.input).toBe(0);
       expect(output.usage.output).toBe(0);
+      expect(mockMessagesCreate).not.toHaveBeenCalled();
+      expect(recordUsage).not.toHaveBeenCalled();
     });
 
-    it("should record usage after successful AI call", async () => {
+    it("records usage for every AI call, including tool rounds", async () => {
       vi.mocked(assistantEnabled).mockReturnValue(true);
       vi.mocked(assertAiBudget).mockResolvedValue(undefined);
-      
-      // Mock Anthropic response - need to mock the client constructor properly
-      const Anthropic = (await import("@anthropic-ai/sdk")).default;
-      const mockCreate = vi.fn().mockResolvedValue({
-        usage: { input_tokens: 100, output_tokens: 50 },
-        content: [
-          {
+      vi.mocked(runTool).mockResolvedValue('{"info":"Public information"}');
+      mockMessagesCreate
+        .mockResolvedValueOnce({
+          usage: { input_tokens: 20, output_tokens: 8 },
+          content: [{
             type: "tool_use",
+            id: "tool-1",
+            name: "get_apartment_info",
+            input: { apartment_name: "Apartment A" },
+          }],
+        })
+        .mockResolvedValueOnce({
+          usage: { input_tokens: 100, output_tokens: 50 },
+          content: [{
+            type: "tool_use",
+            id: "respond-1",
             name: "respond",
             input: {
               language: "en",
@@ -360,13 +376,21 @@ describe("E2 - Enquiry Assistant Loop and Output Checks", () => {
               host_summary: "Guest asked about availability",
               opt_out: false,
             },
-          },
-        ],
+          }],
+        });
+
+      const output = await answerEnquiry(mockInput);
+
+      expect(output.reply).toBe("Yes, it's available.");
+      expect(mockMessagesCreate).toHaveBeenCalledTimes(2);
+      expect(recordUsage).toHaveBeenNthCalledWith(1, "owner-1", "AI_ENQUIRY", {
+        input: 20,
+        output: 8,
       });
-      
-      // The mock is set up at module level, so we need to get the mocked create method
-      // This test documents the expected behavior; full integration requires proper mock setup
-      expect(recordUsage).toBeDefined();
+      expect(recordUsage).toHaveBeenNthCalledWith(2, "owner-1", "AI_ENQUIRY", {
+        input: 100,
+        output: 50,
+      });
     });
 
     it("should not call AI when budget check fails", async () => {
@@ -377,6 +401,7 @@ describe("E2 - Enquiry Assistant Loop and Output Checks", () => {
 
       expect(output.escalate).toBe(true);
       expect(output.reason).toBe("Monthly AI budget exceeded");
+      expect(mockMessagesCreate).not.toHaveBeenCalled();
     });
 
     it("should not call AI when kill switch is off", async () => {
@@ -386,6 +411,7 @@ describe("E2 - Enquiry Assistant Loop and Output Checks", () => {
 
       expect(output.escalate).toBe(true);
       expect(output.reason).toBe("AI assistant disabled");
+      expect(mockMessagesCreate).not.toHaveBeenCalled();
     });
   });
 });

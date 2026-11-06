@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { prisma } from "../lib/db";
 import { recordUsage, monthlyAiCostCents, assertAiBudget, monthlyCount, checkAndSendBudgetWarning, BudgetExceededError } from "../lib/usage";
+import { cleanupDatabase } from "./test-helpers";
 
 // Mock notify module
 vi.mock("../lib/notify", () => ({
@@ -9,14 +10,12 @@ vi.mock("../lib/notify", () => ({
 
 describe("usage", () => {
   beforeEach(async () => {
-    await prisma.usageDaily.deleteMany({});
-    await prisma.owner.deleteMany({});
+    await cleanupDatabase();
     vi.clearAllMocks();
   });
 
   afterEach(async () => {
-    await prisma.usageDaily.deleteMany({});
-    await prisma.owner.deleteMany({});
+    await cleanupDatabase();
   });
 
   it("records usage incrementally", async () => {

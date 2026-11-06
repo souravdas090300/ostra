@@ -38,17 +38,36 @@ export async function sendWhatsApp(input: SendInput): Promise<{ sid: string | nu
     return { sid: null };
   }
 
-  const from = process.env.META_WHATSAPP_PHONE_NUMBER_ID!;
-  const accessToken = process.env.META_ACCESS_TOKEN!;
+  if (mode === "sandbox") {
+    const allowedRecipients = (process.env.META_SANDBOX_ALLOWED_NUMBERS ?? "")
+      .split(",")
+      .map((number) => number.trim())
+      .filter(Boolean);
+    if (!allowedRecipients.includes(input.to)) {
+      throw new WhatsAppError(
+        "Recipient is not on the WhatsApp sandbox allow-list.",
+        true,
+        undefined,
+        "SANDBOX",
+      );
+    }
+  }
 
-  if (!from || !accessToken) {
-    throw new WhatsAppError("META_WHATSAPP_PHONE_NUMBER_ID and META_ACCESS_TOKEN are required", true);
+  const from = process.env.META_PHONE_NUMBER_ID;
+  const accessToken = process.env.META_ACCESS_TOKEN;
+  const apiVersion = process.env.META_API_VERSION;
+
+  if (!from || !accessToken || !apiVersion || !/^v\d+\.\d+$/.test(apiVersion)) {
+    throw new WhatsAppError(
+      "META_PHONE_NUMBER_ID, META_ACCESS_TOKEN and a valid META_API_VERSION are required.",
+      true,
+    );
   }
 
   try {
     let result;
 
-    if (mode === "production" && input.template) {
+    if (input.template) {
       // Send template message
       result = await sendMetaTemplateMessage({
         to: input.to.replace(/^\+/, ""), // Remove + if present
