@@ -29,7 +29,13 @@ export function buildValues(
   };
 }
 
-type Tr = { language: string; body: string; approval: string; metaTemplateName: string | null };
+type Tr = {
+  language: string;
+  body: string;
+  approval: string;
+  metaTemplateName: string | null;
+  revision?: number;
+};
 
 /** Guest language first, then the owner's fallback. In production only approved translations count. */
 export function pickTranslation(
@@ -38,12 +44,15 @@ export function pickTranslation(
   fallbackLanguage: string,
   mode: "dry-run" | "sandbox" | "production",
 ): { translation: Tr; usedFallback: boolean } | null {
+  const newestFirst = (a: Tr, b: Tr) => (b.revision ?? 0) - (a.revision ?? 0);
+
   for (const lang of [guestLanguage, fallbackLanguage]) {
-    const t = translations.find((x) => x.language === lang);
+    const versions = translations.filter((x) => x.language === lang).sort(newestFirst);
+    const t =
+      mode === "production"
+        ? versions.find((version) => version.approval === "APPROVED" && version.metaTemplateName)
+        : versions[0];
     if (!t) continue;
-    // In production, require approval and metaTemplateName
-    if (mode === "production" && !(t.approval === "APPROVED" && t.metaTemplateName)) continue;
-    // In dry-run/sandbox, any translation is fine
     return { translation: t, usedFallback: lang !== guestLanguage };
   }
   return null;

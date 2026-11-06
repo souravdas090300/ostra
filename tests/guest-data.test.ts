@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { prisma } from "../lib/db";
 import { eraseGuestData, collectGuestData } from "../lib/guest-data";
+import { cleanupDatabase } from "./test-helpers";
 
 describe("guest-data", () => {
   let ownerId: string;
@@ -9,6 +10,8 @@ describe("guest-data", () => {
   let bookingId2: string;
 
   beforeEach(async () => {
+    await cleanupDatabase();
+
     const owner = await prisma.owner.create({
       data: {
         email: "guest-data-test@example.com",
@@ -105,13 +108,7 @@ describe("guest-data", () => {
   });
 
   afterEach(async () => {
-    await prisma.message.deleteMany({});
-    await prisma.scheduledMessage.deleteMany({});
-    await prisma.booking.deleteMany({});
-    await prisma.apartment.deleteMany({});
-    await prisma.owner.deleteMany({});
-    await prisma.unmatchedMessage.deleteMany({});
-    await prisma.auditLog.deleteMany({});
+    await cleanupDatabase();
   });
 
   describe("eraseGuestData", () => {

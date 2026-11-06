@@ -1,7 +1,7 @@
 import { prisma } from "./db";
 import { buildValues, pickTranslation, renderText } from "./message-render";
 import { inAllowedWindow, latestUseful } from "./send-time";
-import { toMetaBody } from "./templates";
+import { metaTemplateLocale, toMetaBody } from "./templates";
 import { WhatsAppError, sendWhatsApp, whatsappMode } from "./whatsapp";
 import { automaticMessagesEnabled } from "./flags";
 import { monthlyCount } from "./usage";
@@ -146,10 +146,11 @@ async function sendOne(id: string, now: Date, s: SendSummary) {
     const { sid } = await sendWhatsApp({
       to: b.guestPhone!,
       text,
-      template: picked.translation.metaTemplateName
+      template:
+        picked.translation.approval === "APPROVED" && picked.translation.metaTemplateName
         ? {
             name: picked.translation.metaTemplateName,
-            languageCode: picked.translation.language,
+            languageCode: metaTemplateLocale(picked.translation.language),
             components,
           }
         : undefined,

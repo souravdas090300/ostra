@@ -185,6 +185,7 @@ export async function answerEnquiry(input: EnquiryInput): Promise<EnquiryOutput>
       input: res.usage.input_tokens,
       output: res.usage.output_tokens,
     };
+    await recordUsage(input.ctx.ownerId, "AI_ENQUIRY", usage);
 
     const uses = res.content.filter((block) => block.type === "tool_use");
     const respond = uses.find((block) => block.name === "respond");
@@ -229,9 +230,6 @@ export async function answerEnquiry(input: EnquiryInput): Promise<EnquiryOutput>
         );
       }
       if (out.urgent) out.escalate = true;
-      
-      // Record usage after successful AI call
-      await recordUsage(input.ctx.ownerId, "AI_ENQUIRY", usage);
       
       return out;
     }

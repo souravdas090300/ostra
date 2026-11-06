@@ -1,258 +1,373 @@
 "use server";
 
-import { prisma } from "@/lib/db";
-import { requireOwner } from "@/lib/auth";
-import { hashSource } from "@/lib/templates";
-import { submitTranslation, updateTranslationText } from "@/lib/template-approval";
-import { translateTemplate } from "@/lib/translate";
-import { rescheduleBookings } from "@/lib/schedule";
+import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { requireOwner } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+import { LANGUAGE_CODES } from "@/lib/languages";
+import { reportError } from "@/lib/report-error";
+import { rescheduleBookings } from "@/lib/schedule";
+import {
+  submitTranslation,
+  syncApprovals,
+  TemplateApprovalError,
+  updateTranslationText,
+} from "@/lib/template-approval";
+import { hashSource, validateTemplate, type MessageType } from "@/lib/templates";
+import { translateTemplate } from "@/lib/translate";
+import { whatsappMode } from "@/lib/whatsapp";
 
-export async function POST(formData: FormData) {
-  const action = formData.get("action") as string;
+export type MessagesActionState = { ok?: true; error?: string } | undefined;
 
-  switch (action) {
-    case "updateTemplate":
-      return updateTemplate(formData);
-    case "add":
-      return addTranslation(formData);
-    case "edit":
-      return editTranslation(formData);
-    case "regenerate":
-      return regenerateTranslation(formData);
-    case "submit":
-      return submitForApproval(formData);
-    case "sync":
-      return syncApprovals();
-    case "remove":
-      return removeTranslation(formData);
-    case "updateFallback":
-      return updateFallbackLanguage(formData);
-    default:
-      // Legacy: treat as updateTemplate if no action specified
-      if (formData.get("templateId")) {
-        return updateTemplate(formData);
+const idSchema = z.string().trim().min(1, "Choose a template or translation.").max(100);
+const languageSchema = z.string().refine(
+  (language) => LANGUAGE_CODES.includes(language),
+  "Choose a supported language.",
+);
+const templateSchema = z.object({
+  templateId: idSchema,
+  body: z.string().max(1024, "The message is longer than 1024 characters."),
+  enabled: z.enum(["true", "false"]),
+});
+const translationSchema = z.object({ translationId: idSchema });
+const addTranslationSchema = z.object({
+  templateId: idSchema,
+  language: languageSchema,
+});
+const editTranslationSchema = z.object({
+  translationId: idSchema,
+  body: z.string().max(1024, "The message is longer than 1024 characters."),
+});
+const regenerateSchema = z.object({
+  templateId: idSchema,
+  language: languageSchema,
+});
+const fallbackSchema = z.object({ fallbackLanguage: languageSchema });
+const emptyActionSchema = z.object({}).strict();
+const enquiriesSchema = z.object({ enabled: z.enum(["true", "false"]) });
+
+function formValue(formData: FormData, key: string): string {
+  const value = formData.get(key);
+  return typeof value === "string" ? value : "";
+}
+
+function validationError(error: z.ZodError): MessagesActionState {
+  return { error: error.issues[0]?.message ?? "Check the submitted values." };
+}
+
+function actionError(error: unknown, fallback: string): MessagesActionState {
+  if (error instanceof TemplateApprovalError) return { error: error.message };
+  if (error instanceof z.ZodError) return validationError(error);
+  reportError(error, { area: "messages-settings" });
+  return { error: fallback };
+}
+
+export async function saveTemplateAction(
+  _previousState: MessagesActionState,
+  formData: FormData,
+): Promise<MessagesActionState> {
+  const owner = await requireOwner();
+  const parsed = templateSchema.safeParse({
+    templateId: formValue(formData, "templateId"),
+    body: formValue(formData, "body"),
+    enabled: formValue(formData, "enabled"),
+  });
+  if (!parsed.success) return validationError(parsed.error);
+
+  try {
+    const template = await prisma.messageTemplate.findFirst({
+      where: { id: parsed.data.templateId, ownerId: owner.id },
+      include: { owner: { select: { hostLanguage: true } } },
+    });
+    if (!template) return { error: "Template not found." };
+
+    const validationErrors = validateTemplate(template.type as MessageType, parsed.data.body);
+    if (validationErrors.length) return { error: validationErrors.join(" ") };
+
+    const enabled = parsed.data.enabled === "true";
+    const bodyChanged = template.body !== parsed.data.body;
+    await prisma.$transaction(async (tx) => {
+      await tx.messageTemplate.update({
+        where: { id: template.id },
+        data: { body: parsed.data.body, enabled },
+      });
+
+      if (bodyChanged) {
+        const hostTranslation = await tx.templateTranslation.findFirst({
+          where: { templateId: template.id, language: template.owner.hostLanguage },
+          orderBy: { revision: "desc" },
+          select: { body: true, revision: true },
+        });
+        if (hostTranslation?.body !== parsed.data.body) {
+          await tx.templateTranslation.create({
+            data: {
+              templateId: template.id,
+              language: template.owner.hostLanguage,
+              body: parsed.data.body,
+              sourceHash: hashSource(parsed.data.body),
+              revision: (hostTranslation?.revision ?? 0) + 1,
+            },
+          });
+        }
       }
-      throw new Error("Invalid action");
+    });
+
+    if (bodyChanged || enabled !== template.enabled) {
+      const bookings = await prisma.booking.findMany({
+        where: {
+          apartment: { ownerId: owner.id },
+          status: "CONFIRMED",
+          checkIn: { gte: new Date() },
+        },
+        select: { id: true },
+      });
+      await rescheduleBookings(bookings.map((booking) => booking.id));
+    }
+
+    revalidatePath("/settings/messages");
+    return { ok: true };
+  } catch (error) {
+    return actionError(error, "Could not save this message template.");
   }
 }
 
-export async function updateTemplate(formData: FormData) {
-  const session = await requireOwner();
-  const ownerId = session.id;
-
-  const templateId = formData.get("templateId") as string;
-  const body = formData.get("body") as string;
-  const enabled = formData.get("enabled") === "true";
-
-  const template = await prisma.messageTemplate.findUnique({
-    where: { id: templateId },
+export async function addTranslationAction(
+  _previousState: MessagesActionState,
+  formData: FormData,
+): Promise<MessagesActionState> {
+  const owner = await requireOwner();
+  const parsed = addTranslationSchema.safeParse({
+    templateId: formValue(formData, "templateId"),
+    language: formValue(formData, "language"),
   });
+  if (!parsed.success) return validationError(parsed.error);
 
-  if (!template || template.ownerId !== ownerId) {
-    throw new Error("Template not found");
-  }
+  try {
+    const template = await prisma.messageTemplate.findFirst({
+      where: { id: parsed.data.templateId, ownerId: owner.id },
+      include: { owner: { select: { hostLanguage: true } } },
+    });
+    if (!template) return { error: "Template not found." };
+    if (parsed.data.language === template.owner.hostLanguage) {
+      return { error: "The host language already has a source template." };
+    }
+    const existing = await prisma.templateTranslation.findFirst({
+      where: { templateId: template.id, language: parsed.data.language },
+      select: { id: true },
+    });
+    if (existing) return { error: "A translation for this language already exists." };
 
-  await prisma.messageTemplate.update({
-    where: { id: templateId },
-    data: { body, enabled },
-  });
-
-  // Update the host language translation
-  const hostTranslation = await prisma.templateTranslation.findUnique({
-    where: {
-      templateId_language: { templateId, language: template.ownerId },
-    },
-  });
-
-  if (hostTranslation) {
-    await prisma.templateTranslation.update({
-      where: { id: hostTranslation.id },
+    const translatedBody = await translateTemplate(
+      template.type as MessageType,
+      template.body,
+      template.owner.hostLanguage,
+      parsed.data.language,
+    );
+    const validationErrors = validateTemplate(template.type as MessageType, translatedBody);
+    if (validationErrors.length) return { error: validationErrors.join(" ") };
+    await prisma.templateTranslation.create({
       data: {
-        body,
-        sourceHash: hashSource(body),
-        approval: "NONE",
-        metaTemplateName: null,
-        rejectionReason: null,
+        templateId: template.id,
+        language: parsed.data.language,
+        body: translatedBody,
+        sourceHash: hashSource(template.body),
+        revision: 1,
       },
     });
+    revalidatePath("/settings/messages");
+    return { ok: true };
+  } catch (error) {
+    return actionError(error, "Could not add this translation.");
   }
-
-  // Mark other translations as stale by setting sourceHash to empty
-  await prisma.templateTranslation.updateMany({
-    where: {
-      templateId,
-      language: { not: template.ownerId },
-    },
-    data: {
-      sourceHash: "",
-    },
-  });
-
-  // Reschedule bookings when template changes
-  const bookings = await prisma.booking.findMany({
-    where: {
-      apartment: { ownerId },
-      status: "CONFIRMED",
-      checkIn: { gte: new Date() },
-    },
-    select: { id: true },
-  });
-  await rescheduleBookings(bookings.map((b) => b.id));
-  revalidatePath("/settings/messages");
 }
 
-export async function addTranslation(formData: FormData) {
-  const session = await requireOwner();
-  const ownerId = session.id;
-
-  const templateId = formData.get("templateId") as string;
-  const language = formData.get("language") as string;
-
-  const template = await prisma.messageTemplate.findUnique({
-    where: { id: templateId },
-    include: { owner: true },
+export async function editTranslationAction(
+  _previousState: MessagesActionState,
+  formData: FormData,
+): Promise<MessagesActionState> {
+  const owner = await requireOwner();
+  const parsed = editTranslationSchema.safeParse({
+    translationId: formValue(formData, "translationId"),
+    body: formValue(formData, "body"),
   });
+  if (!parsed.success) return validationError(parsed.error);
 
-  if (!template || template.ownerId !== ownerId) {
-    throw new Error("Template not found");
+  try {
+    await updateTranslationText(parsed.data.translationId, owner.id, parsed.data.body);
+    revalidatePath("/settings/messages");
+    return { ok: true };
+  } catch (error) {
+    return actionError(error, "Could not save this translation.");
   }
-
-  // Auto-translate using AI
-  const translatedBody = await translateTemplate(
-    template.type as "PRE_ARRIVAL" | "CHECK_IN" | "CHECK_OUT" | "REVIEW_REQUEST",
-    template.body,
-    template.owner.hostLanguage,
-    language,
-  );
-
-  await prisma.templateTranslation.create({
-    data: {
-      templateId,
-      language,
-      body: translatedBody,
-      sourceHash: hashSource(template.body),
-    },
-  });
-  revalidatePath("/settings/messages");
 }
 
-export async function editTranslation(formData: FormData) {
-  const session = await requireOwner();
-  const ownerId = session.id;
-
-  const translationId = formData.get("translationId") as string;
-  const body = formData.get("body") as string;
-
-  await updateTranslationText(translationId, ownerId, body);
-  revalidatePath("/settings/messages");
-}
-
-export async function regenerateTranslation(formData: FormData) {
-  const session = await requireOwner();
-  const ownerId = session.id;
-
-  const templateId = formData.get("templateId") as string;
-  const language = formData.get("language") as string;
-
-  const template = await prisma.messageTemplate.findUnique({
-    where: { id: templateId },
-    include: { translations: true, owner: true },
+export async function regenerateTranslationAction(
+  _previousState: MessagesActionState,
+  formData: FormData,
+): Promise<MessagesActionState> {
+  const owner = await requireOwner();
+  const parsed = regenerateSchema.safeParse({
+    templateId: formValue(formData, "templateId"),
+    language: formValue(formData, "language"),
   });
+  if (!parsed.success) return validationError(parsed.error);
 
-  if (!template || template.ownerId !== ownerId) {
-    throw new Error("Template not found");
+  try {
+    const template = await prisma.messageTemplate.findFirst({
+      where: { id: parsed.data.templateId, ownerId: owner.id },
+      include: { owner: { select: { hostLanguage: true } } },
+    });
+    if (!template) return { error: "Template not found." };
+
+    const translation = await prisma.templateTranslation.findFirst({
+      where: { templateId: template.id, language: parsed.data.language },
+      orderBy: { revision: "desc" },
+    });
+    if (!translation || translation.editedByHost) {
+      return { error: "This translation cannot be regenerated." };
+    }
+
+    const translatedBody = await translateTemplate(
+      template.type as MessageType,
+      template.body,
+      template.owner.hostLanguage,
+      parsed.data.language,
+    );
+    const validationErrors = validateTemplate(template.type as MessageType, translatedBody);
+    if (validationErrors.length) return { error: validationErrors.join(" ") };
+    await prisma.templateTranslation.create({
+      data: {
+        templateId: template.id,
+        language: parsed.data.language,
+        body: translatedBody,
+        sourceHash: hashSource(template.body),
+        revision: translation.revision + 1,
+      },
+    });
+    revalidatePath("/settings/messages");
+    return { ok: true };
+  } catch (error) {
+    return actionError(error, "Could not regenerate this translation.");
   }
+}
 
-  const translation = template.translations.find((t) => t.language === language);
-  if (!translation || translation.editedByHost) {
-    throw new Error("Cannot regenerate edited translations");
+export async function submitForApprovalAction(
+  _previousState: MessagesActionState,
+  formData: FormData,
+): Promise<MessagesActionState> {
+  const owner = await requireOwner();
+  const parsed = translationSchema.safeParse({
+    translationId: formValue(formData, "translationId"),
+  });
+  if (!parsed.success) return validationError(parsed.error);
+
+  try {
+    await submitTranslation(parsed.data.translationId, owner.id);
+    revalidatePath("/settings/messages");
+    return { ok: true };
+  } catch (error) {
+    return actionError(error, "Could not submit this translation to Meta.");
   }
-
-  const translatedBody = await translateTemplate(
-    template.type as "PRE_ARRIVAL" | "CHECK_IN" | "CHECK_OUT" | "REVIEW_REQUEST",
-    template.body,
-    template.owner.hostLanguage,
-    language,
-  );
-
-  await prisma.templateTranslation.update({
-    where: { id: translation.id },
-    data: {
-      body: translatedBody,
-      sourceHash: hashSource(template.body),
-      approval: "NONE",
-      metaTemplateName: null,
-      rejectionReason: null,
-    },
-  });
-  revalidatePath("/settings/messages");
 }
 
-export async function submitForApproval(formData: FormData) {
-  const session = await requireOwner();
-  const ownerId = session.id;
-
-  const translationId = formData.get("translationId") as string;
-
-  await submitTranslation(translationId, ownerId);
-  revalidatePath("/settings/messages");
-}
-
-export async function syncApprovals() {
-  const session = await requireOwner();
-  const ownerId = session.id;
-
-  // Only sync this owner's templates
-  const pending = await prisma.templateTranslation.findMany({
-    where: {
-      approval: "PENDING",
-      metaTemplateName: { not: null },
-      template: { ownerId },
-    },
-  });
-
-  if (pending.length === 0) return;
-
-  const { syncApprovals: sync } = await import("@/lib/template-approval");
-  await sync();
-  revalidatePath("/settings/messages");
-}
-
-export async function removeTranslation(formData: FormData) {
-  const session = await requireOwner();
-  const ownerId = session.id;
-
-  const translationId = formData.get("translationId") as string;
-
-  const translation = await prisma.templateTranslation.findUnique({
-    where: { id: translationId },
-    include: { template: { include: { owner: true } } },
-  });
-
-  if (!translation || translation.template.ownerId !== ownerId) {
-    throw new Error("Translation not found");
+export async function refreshApprovalsAction(
+  _previousState: MessagesActionState,
+  _formData: FormData,
+): Promise<MessagesActionState> {
+  const owner = await requireOwner();
+  if (!emptyActionSchema.safeParse(Object.fromEntries(_formData)).success) {
+    return { error: "Unexpected settings were submitted." };
   }
-
-  if (translation.language === translation.template.owner.hostLanguage) {
-    throw new Error("Cannot remove host language translation");
+  if (whatsappMode() === "dry-run") {
+    return { error: "Connect your WhatsApp sender first by selecting sandbox or production mode." };
   }
-
-  await prisma.templateTranslation.delete({
-    where: { id: translationId },
-  });
-  revalidatePath("/settings/messages");
+  try {
+    await syncApprovals(owner.id);
+    revalidatePath("/settings/messages");
+    return { ok: true };
+  } catch (error) {
+    return actionError(error, "Could not refresh template approval status.");
+  }
 }
 
-export async function updateFallbackLanguage(formData: FormData) {
-  const session = await requireOwner();
-  const ownerId = session.id;
-
-  const fallbackLanguage = formData.get("fallbackLanguage") as string;
-
-  await prisma.owner.update({
-    where: { id: ownerId },
-    data: { fallbackLanguage },
+export async function removeTranslationAction(
+  _previousState: MessagesActionState,
+  formData: FormData,
+): Promise<MessagesActionState> {
+  const owner = await requireOwner();
+  const parsed = translationSchema.safeParse({
+    translationId: formValue(formData, "translationId"),
   });
-  revalidatePath("/settings/messages");
+  if (!parsed.success) return validationError(parsed.error);
+
+  try {
+    const translation = await prisma.templateTranslation.findFirst({
+      where: { id: parsed.data.translationId, template: { ownerId: owner.id } },
+      include: { template: { include: { owner: { select: { hostLanguage: true } } } } },
+    });
+    if (!translation) return { error: "Translation not found." };
+    if (translation.language === translation.template.owner.hostLanguage) {
+      return { error: "The host language translation cannot be removed." };
+    }
+    const latest = await prisma.templateTranslation.findFirst({
+      where: { templateId: translation.templateId, language: translation.language },
+      orderBy: { revision: "desc" },
+      select: { id: true },
+    });
+    if (latest?.id !== translation.id) {
+      return { error: "Only the latest translation version can be removed." };
+    }
+    await prisma.templateTranslation.deleteMany({
+      where: { templateId: translation.templateId, language: translation.language },
+    });
+    revalidatePath("/settings/messages");
+    return { ok: true };
+  } catch (error) {
+    return actionError(error, "Could not remove this translation.");
+  }
+}
+
+export async function updateFallbackLanguageAction(
+  _previousState: MessagesActionState,
+  formData: FormData,
+): Promise<MessagesActionState> {
+  const owner = await requireOwner();
+  const parsed = fallbackSchema.safeParse({
+    fallbackLanguage: formValue(formData, "fallbackLanguage"),
+  });
+  if (!parsed.success) return validationError(parsed.error);
+
+  try {
+    await prisma.owner.update({
+      where: { id: owner.id },
+      data: { fallbackLanguage: parsed.data.fallbackLanguage },
+    });
+    revalidatePath("/settings/messages");
+    return { ok: true };
+  } catch (error) {
+    return actionError(error, "Could not save the fallback language.");
+  }
+}
+
+export async function setEnquiriesEnabledAction(
+  _previousState: MessagesActionState,
+  formData: FormData,
+): Promise<MessagesActionState> {
+  const owner = await requireOwner();
+  const parsed = enquiriesSchema.safeParse({
+    enabled: formValue(formData, "enabled"),
+  });
+  if (!parsed.success) return validationError(parsed.error);
+  try {
+    const updated = await prisma.owner.updateMany({
+      where: { id: owner.id },
+      data: { enquiriesEnabled: parsed.data.enabled === "true" },
+    });
+    if (updated.count !== 1) return { error: "Owner not found." };
+    revalidatePath("/settings/messages");
+    revalidatePath("/settings/enquiries");
+    return { ok: true };
+  } catch (error) {
+    return actionError(error, "Could not update the enquiries setting.");
+  }
 }

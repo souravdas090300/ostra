@@ -4,13 +4,14 @@ on:
   push:
     branches: [main, develop]
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, audit/parent-dependency-updates]
 
 jobs:
   check:
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: postgresql://ostra:ostra_test_password@localhost:5432/ostra_test
+      SHADOW_DATABASE_URL: postgresql://ostra:ostra_test_password@localhost:5432/ostra_shadow
     services:
       postgres:
         image: postgres:16
@@ -28,12 +29,20 @@ jobs:
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks (full history)
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: 'false'
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: "22"
-          cache: "npm"
+          node-version: '22'
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
@@ -41,8 +50,17 @@ jobs:
       - name: Generate Prisma Client
         run: npx prisma generate
 
+      - name: Validate Prisma schema
+        run: npx prisma validate
+
+      - name: Create migration shadow database
+        run: echo "CREATE DATABASE ostra_shadow" | npx prisma db execute --stdin --url "$DATABASE_URL"
+
       - name: Prepare test database
         run: npx prisma migrate deploy
+
+      - name: Check database schema drift
+        run: npx prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --shadow-database-url "$SHADOW_DATABASE_URL" --exit-code
 
       - name: Run lint
         run: npm run lint
@@ -57,7 +75,10 @@ jobs:
         run: npm run build
 
       - name: Run npm audit (Phase 9 security check)
-        run: npm audit --audit-level=moderate
+        run: |
+          audit_exit_code=0
+          npm audit --audit-level=moderate --json > "$RUNNER_TEMP/npm-audit.json" || audit_exit_code=$?
+          node scripts/check-npm-audit.mjs "$RUNNER_TEMP/npm-audit.json" "$audit_exit_code"
 
       - name: Check for secrets in code (Phase 9 security check)
         run: |

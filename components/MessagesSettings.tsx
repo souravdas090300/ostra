@@ -1,31 +1,47 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { TEMPLATE_VARS, fillTemplate, DEFAULT_TEMPLATES, validateTemplate, hashSource } from "@/lib/templates";
+import { useActionState, useRef, useState } from "react";
+import {
+  addTranslationAction,
+  editTranslationAction,
+  refreshApprovalsAction,
+  regenerateTranslationAction,
+  removeTranslationAction,
+  saveTemplateAction,
+  submitForApprovalAction,
+  setEnquiriesEnabledAction,
+  updateFallbackLanguageAction,
+  type MessagesActionState,
+} from "@/app/(app)/settings/messages/actions";
+import { TEMPLATE_VARS, fillTemplate, validateTemplate, hashSource, type MessageType } from "@/lib/templates";
 import type { Language } from "@/lib/languages";
+
+type Translation = {
+  id: string;
+  language: string;
+  body: string;
+  sourceHash: string;
+  editedByHost: boolean;
+  approval: string;
+  metaTemplateName: string | null;
+  metaCategory: string | null;
+  rejectionReason: string | null;
+  revision: number;
+};
 
 type MessageTemplate = {
   id: string;
-  type: string;
+  type: MessageType;
   body: string;
   enabled: boolean;
-  translations: {
-    id: string;
-    language: string;
-    body: string;
-    sourceHash: string;
-    editedByHost: boolean;
-    approval: string;
-    metaTemplateName: string | null;
-    rejectionReason: string | null;
-  }[];
+  translations: Translation[];
 };
 
 type Owner = {
   fallbackLanguage: string;
   hostLanguage: string;
-  templates: MessageTemplate[];
+  enquiriesEnabled: boolean;
+  templates: Array<Omit<MessageTemplate, "type"> & { type: string }>;
 };
 
 type Props = {
@@ -34,67 +50,87 @@ type Props = {
   templateCategory: Record<string, "UTILITY" | "MARKETING">;
 };
 
-const MESSAGE_TYPES = ["PRE_ARRIVAL", "CHECK_IN", "CHECK_OUT", "REVIEW_REQUEST"] as const;
+const MESSAGE_TYPES: MessageType[] = ["PRE_ARRIVAL", "CHECK_IN", "CHECK_OUT", "REVIEW_REQUEST"];
 
-export default function MessagesSettings({
-  owner,
-  languages,
-  templateCategory,
-}: Props) {
-  const router = useRouter();
-  const [fallbackLanguage, setFallbackLanguage] = useState(owner.fallbackLanguage);
+function ActionFeedback({ state }: { state: MessagesActionState }) {
+  if (state?.error) {
+    return <p className="mt-2 text-sm text-red-700" role="alert">{state.error}</p>;
+  }
+  if (state?.ok) {
+    return <p className="mt-2 text-sm text-green-700" role="status">Saved.</p>;
+  }
+  return null;
+}
 
-  const handleSaveFallback = async () => {
-    const fd = new FormData();
-    fd.set("fallbackLanguage", fallbackLanguage);
-    fd.set("action", "updateFallback");
-    const res = await fetch("/settings/messages", {
-      method: "POST",
-      body: fd,
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.ok) {
-      alert(data.errors?.join(", ") || "Save failed");
-      return;
-    }
-    router.refresh();
-  };
+export default function MessagesSettings({ owner, languages, templateCategory }: Props) {
+  const [fallbackState, fallbackAction, fallbackPending] = useActionState(
+    updateFallbackLanguageAction,
+    undefined,
+  );
+  const [enquiriesState, enquiriesAction, enquiriesPending] = useActionState(
+    setEnquiriesEnabledAction,
+    undefined,
+  );
 
   return (
     <div className="space-y-6">
-      <div className="bg-white shadow rounded-lg p-6">
-        <h2 className="text-lg font-medium mb-4">Fallback Language</h2>
-        <p className="text-sm text-gray-600 mb-4">
+      <section className="rounded-lg bg-white p-6 shadow">
+        <h2 className="mb-2 text-lg font-medium">Fallback language</h2>
+        <p className="mb-4 text-sm text-gray-600">
           Used when a guest&apos;s language has no approved template.
         </p>
-        <select
-          value={fallbackLanguage}
-          onChange={(e) => setFallbackLanguage(e.target.value)}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border p-2"
-        >
-          {languages.map((lang) => (
-            <option key={lang.code} value={lang.code}>
-              {lang.native} ({lang.name})
-            </option>
-          ))}
-        </select>
-        <button
-          onClick={handleSaveFallback}
-          className="mt-3 rounded-md bg-black px-4 py-2 text-sm text-white hover:bg-gray-800"
-        >
-          Save
-        </button>
-      </div>
+        <form action={fallbackAction} className="space-y-3">
+          <label className="block">
+            <span className="sr-only">Fallback language</span>
+            <select
+              name="fallbackLanguage"
+              defaultValue={owner.fallbackLanguage}
+              className="block w-full rounded-md border p-2 text-sm"
+            >
+              {languages.map((language) => (
+                <option key={language.code} value={language.code}>
+                  {language.native} ({language.name})
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            disabled={fallbackPending}
+            className="rounded-md bg-black px-4 py-2 text-sm text-white disabled:opacity-50"
+          >
+            {fallbackPending ? "Saving..." : "Save fallback language"}
+          </button>
+          <ActionFeedback state={fallbackState} />
+        </form>
+      </section>
+
+      <section className="rounded-lg bg-white p-6 shadow">
+        <h2 className="mb-1 text-lg font-medium">Enquiry replies</h2>
+        <p className="mb-4 text-sm text-gray-600">
+          Allow Ostra to answer new guest enquiries using your public apartment information.
+        </p>
+        <form action={enquiriesAction}>
+          <input type="hidden" name="enabled" value={owner.enquiriesEnabled ? "false" : "true"} />
+          <button
+            type="submit"
+            role="switch"
+            aria-checked={owner.enquiriesEnabled}
+            disabled={enquiriesPending}
+            className="rounded-md border px-4 py-2 text-sm font-medium disabled:opacity-50"
+          >
+            Enquiry replies: {owner.enquiriesEnabled ? "On" : "Off"}
+          </button>
+          <ActionFeedback state={enquiriesState} />
+        </form>
+      </section>
 
       {MESSAGE_TYPES.map((type) => {
-        const template = owner.templates.find((t) => t.type === type);
+        const template = owner.templates.find((item) => item.type === type);
         if (!template) return null;
-
         return (
           <TemplateCard
             key={type}
-            type={type}
-            template={template}
+            template={{ ...template, type }}
             category={templateCategory[type]}
             hostLanguage={owner.hostLanguage}
             languages={languages}
@@ -106,67 +142,23 @@ export default function MessagesSettings({
 }
 
 function TemplateCard({
-  type,
   template,
   category,
   hostLanguage,
   languages,
 }: {
-  type: string;
   template: MessageTemplate;
   category: "UTILITY" | "MARKETING";
   hostLanguage: string;
   languages: Language[];
 }) {
-  const router = useRouter();
   const [body, setBody] = useState(template.body);
   const [enabled, setEnabled] = useState(template.enabled);
   const [errors, setErrors] = useState<string[]>([]);
-  const [saving, setSaving] = useState(false);
-
-  const handleBodyChange = (value: string) => {
-    setBody(value);
-    setErrors(validateTemplate(type as "PRE_ARRIVAL" | "CHECK_IN" | "CHECK_OUT" | "REVIEW_REQUEST", value));
-  };
-
-  const handleSave = async () => {
-    setSaving(true);
-    const fd = new FormData();
-    fd.set("templateId", template.id);
-    fd.set("body", body);
-    fd.set("enabled", enabled.toString());
-    fd.set("action", "updateTemplate");
-    const res = await fetch("/settings/messages", {
-      method: "POST",
-      body: fd,
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.ok) {
-      setSaving(false);
-      alert(data.errors?.join(", ") || "Save failed");
-      return;
-    }
-    setSaving(false);
-    router.refresh();
-  };
-
-  const insertVariable = (variable: string) => {
-    const textarea = document.activeElement as HTMLTextAreaElement;
-    if (textarea) {
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const text = body.slice(0, start) + `{{${variable}}}` + body.slice(end);
-      setBody(text);
-      setErrors(validateTemplate(type as "PRE_ARRIVAL" | "CHECK_IN" | "CHECK_OUT" | "REVIEW_REQUEST", text));
-      textarea.focus();
-      textarea.setSelectionRange(start + variable.length + 4, start + variable.length + 4);
-    }
-  };
-
-  const typeLabel = type.replace(/_/g, " ");
-  const allowedVars = TEMPLATE_VARS[type as keyof typeof TEMPLATE_VARS] || [];
-
-  // Sample values for preview
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [saveState, saveAction, saving] = useActionState(saveTemplateAction, undefined);
+  const allowedVariables = TEMPLATE_VARS[template.type];
+  const currentSourceHash = hashSource(template.body);
   const sampleValues: Record<string, string> = {
     guestName: "Anna",
     apartmentName: "Seaview Apartment",
@@ -175,381 +167,363 @@ function TemplateCard({
     checkOutTime: "11:00",
     reviewUrl: "https://example.com/review",
   };
-  const preview = fillTemplate(body, sampleValues);
+  const followUp = template.type === "REVIEW_REQUEST";
+
+  const changeBody = (value: string) => {
+    setBody(value);
+    setErrors(validateTemplate(template.type, value));
+  };
+
+  const insertVariable = (variable: string) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const token = `{{${variable}}}`;
+    const nextBody = body.slice(0, start) + token + body.slice(end);
+    changeBody(nextBody);
+    requestAnimationFrame(() => {
+      textarea.focus();
+      const caret = start + token.length;
+      textarea.setSelectionRange(caret, caret);
+    });
+  };
 
   return (
-    <div className="bg-white shadow rounded-lg p-6">
-      <div className="flex justify-between items-start mb-4">
-        <h2 className="text-lg font-medium">{typeLabel}</h2>
-        <div className="flex items-center space-x-4">
+    <section className="rounded-lg bg-white p-6 shadow">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <h2 className="text-lg font-medium">
+          {followUp ? "Follow-up: review request" : template.type.replace(/_/g, " ")}
+        </h2>
+        <div className="flex items-center gap-4">
           <span className="text-sm text-gray-500">{category}</span>
-          <label className="flex items-center">
+          <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
               checked={enabled}
-              onChange={(e) => setEnabled(e.target.checked)}
-              className="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+              onChange={(event) => setEnabled(event.target.checked)}
             />
-            <span className="ml-2 text-sm text-gray-700">Enabled</span>
+            Enabled
           </label>
         </div>
       </div>
 
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Message (in {hostLanguage})
-          </label>
+      <form action={saveAction} className="space-y-4">
+        <input type="hidden" name="templateId" value={template.id} />
+        <input type="hidden" name="enabled" value={enabled ? "true" : "false"} />
+        <label className="block">
+          <span className="mb-2 block text-sm font-medium">Message (in {hostLanguage})</span>
           <textarea
+            ref={textareaRef}
+            name="body"
             value={body}
-            onChange={(e) => handleBodyChange(e.target.value)}
+            onChange={(event) => changeBody(event.target.value)}
             rows={4}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border p-2"
+            dir="auto"
+            className="block w-full rounded-md border p-2 text-sm"
           />
-          {errors.length > 0 && (
-            <div className="mt-2 text-sm text-red-600">
-              {errors.map((error, i) => (
-                <div key={i}>{error}</div>
-              ))}
-            </div>
-          )}
-          <div className="mt-2 flex flex-wrap gap-2">
-            {allowedVars.map((v, i) => (
-              <button
-                key={`${v}-${i}`}
-                type="button"
-                onClick={() => insertVariable(v)}
-                className="text-xs bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded"
-              >
-                +{v}
-              </button>
-            ))}
-          </div>
+        </label>
+        {errors.length > 0 && (
+          <ul className="list-inside list-disc text-sm text-red-700" role="alert">
+            {errors.map((error) => <li key={error}>{error}</li>)}
+          </ul>
+        )}
+        <div className="flex flex-wrap gap-2">
+          {allowedVariables.map((variable) => (
+            <button
+              key={variable}
+              type="button"
+              onClick={() => insertVariable(variable)}
+              className="rounded bg-gray-100 px-2 py-1 text-xs hover:bg-gray-200"
+            >
+              +{variable}
+            </button>
+          ))}
         </div>
-
         <div>
-          <span className="block text-sm font-medium text-gray-700 mb-2">Preview</span>
-          <div className="bg-gray-50 p-3 rounded text-sm border" role="status" aria-live="polite">
-            {preview}
+          <span className="mb-2 block text-sm font-medium">Preview</span>
+          <div className="rounded border bg-gray-50 p-3 text-sm" role="status" aria-live="polite" dir="auto">
+            {fillTemplate(body, sampleValues)}
           </div>
         </div>
-
         <button
-          onClick={handleSave}
           disabled={saving || errors.length > 0}
-          className="rounded-md bg-black px-4 py-2 text-sm text-white hover:bg-gray-800 disabled:opacity-50"
+          className="rounded-md bg-black px-4 py-2 text-sm text-white disabled:opacity-50"
         >
           {saving ? "Saving..." : "Save"}
         </button>
+        <ActionFeedback state={saveState} />
+      </form>
 
+      {!followUp && (
         <TranslationsTable
-          translations={template.translations}
+          template={template}
           hostLanguage={hostLanguage}
           languages={languages}
-          templateId={template.id}
-          currentSourceHash={hashSource(template.body)}
+          currentSourceHash={currentSourceHash}
+          requestedCategory={category}
         />
-      </div>
-    </div>
+      )}
+    </section>
   );
 }
 
+function latestByLanguage(translations: Translation[]): Translation[] {
+  const latest = new Map<string, Translation>();
+  for (const translation of [...translations].sort(
+    (left, right) => right.revision - left.revision,
+  )) {
+    if (!latest.has(translation.language)) latest.set(translation.language, translation);
+  }
+  return [...latest.values()];
+}
+
 function TranslationsTable({
-  translations,
+  template,
   hostLanguage,
   languages,
-  templateId,
   currentSourceHash,
+  requestedCategory,
 }: {
-  translations: MessageTemplate["translations"];
+  template: MessageTemplate;
   hostLanguage: string;
   languages: Language[];
-  templateId: string;
   currentSourceHash: string;
+  requestedCategory: string;
 }) {
-  const router = useRouter();
-  const [addingLanguage, setAddingLanguage] = useState(false);
+  const [addState, addAction, adding] = useActionState(addTranslationAction, undefined);
+  const [refreshState, refreshAction, refreshing] = useActionState(refreshApprovalsAction, undefined);
   const [selectedLanguage, setSelectedLanguage] = useState("");
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editBody, setEditBody] = useState("");
-  const [errors, setErrors] = useState<string[]>([]);
-
-  const getStatusBadge = (approval: string, rejectionReason: string | null) => {
-    switch (approval) {
-      case "APPROVED":
-        return <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800">Approved</span>;
-      case "PENDING":
-        return <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-yellow-100 text-yellow-800">Pending</span>;
-      case "REJECTED":
-        return (
-          <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800" title={rejectionReason || ""}>
-            Rejected
-          </span>
-        );
-      default:
-        return <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-gray-100 text-gray-800">Not submitted</span>;
-    }
-  };
-
-  const handleAddTranslation = async () => {
-    if (!selectedLanguage) return;
-    const fd = new FormData();
-    fd.set("templateId", templateId);
-    fd.set("language", selectedLanguage);
-    fd.set("action", "add");
-    const res = await fetch("/settings/messages", {
-      method: "POST",
-      body: fd,
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.ok) {
-      setErrors(data.errors ?? ["Add failed"]);
-      return;
-    }
-    setAddingLanguage(false);
-    setSelectedLanguage("");
-    setErrors([]);
-    router.refresh();
-  };
-
-  const handleEdit = (tr: MessageTemplate["translations"][number]) => {
-    setEditingId(tr.id);
-    setEditBody(tr.body);
-  };
-
-  const handleSaveEdit = async () => {
-    if (!editingId) return;
-    const fd = new FormData();
-    fd.set("translationId", editingId);
-    fd.set("body", editBody);
-    fd.set("action", "edit");
-    const res = await fetch("/settings/messages", {
-      method: "POST",
-      body: fd,
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.ok) {
-      setErrors(data.errors ?? ["Save failed"]);
-      return;
-    }
-    setEditingId(null);
-    setErrors([]);
-    router.refresh();
-  };
-
-  const handleRegenerate = async (tr: MessageTemplate["translations"][number]) => {
-    if (tr.editedByHost) return; // Blocked when edited by host
-    const fd = new FormData();
-    fd.set("templateId", templateId);
-    fd.set("language", tr.language);
-    fd.set("action", "regenerate");
-    const res = await fetch("/settings/messages", {
-      method: "POST",
-      body: fd,
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.ok) {
-      setErrors(data.errors ?? ["Regenerate failed"]);
-      return;
-    }
-    setErrors([]);
-    router.refresh();
-  };
-
-  const handleSubmitApproval = async (tr: MessageTemplate["translations"][number]) => {
-    const fd = new FormData();
-    fd.set("translationId", tr.id);
-    fd.set("action", "submit");
-    const res = await fetch("/settings/messages", {
-      method: "POST",
-      body: fd,
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.ok) {
-      setErrors(data.errors ?? ["Submit failed"]);
-      return;
-    }
-    setErrors([]);
-    router.refresh();
-  };
-
-  const handleRefreshStatus = async () => {
-    const fd = new FormData();
-    fd.set("action", "sync");
-    const res = await fetch("/settings/messages", {
-      method: "POST",
-      body: fd,
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.ok) {
-      setErrors(data.errors ?? ["Sync failed"]);
-      return;
-    }
-    setErrors([]);
-    router.refresh();
-  };
-
-  const handleRemove = async (tr: MessageTemplate["translations"][number]) => {
-    const fd = new FormData();
-    fd.set("translationId", tr.id);
-    fd.set("action", "remove");
-    const res = await fetch("/settings/messages", {
-      method: "POST",
-      body: fd,
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.ok) {
-      setErrors(data.errors ?? ["Remove failed"]);
-      return;
-    }
-    setErrors([]);
-    router.refresh();
-  };
+  const translations = latestByLanguage(template.translations);
+  const availableLanguages = languages.filter(
+    (language) => !translations.some((translation) => translation.language === language.code),
+  );
 
   return (
-    <div>
-      <h3 className="text-sm font-medium text-gray-700 mb-2">Translations</h3>
+    <div className="mt-6 space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 className="text-sm font-medium text-gray-700">Translations</h3>
+        <form action={refreshAction}>
+          <button
+            disabled={refreshing}
+            className="rounded border px-3 py-1.5 text-sm disabled:opacity-50"
+          >
+            {refreshing ? "Refreshing..." : "Refresh approval statuses"}
+          </button>
+          <ActionFeedback state={refreshState} />
+        </form>
+      </div>
+
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Language</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+              <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">Language</th>
+              <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">Status</th>
+              <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">Translation and actions</th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {translations.map((tr) => {
-              const lang = languages.find((l) => l.code === tr.language);
-              const isHostLanguage = tr.language === hostLanguage;
-              const isStale = !isHostLanguage && tr.sourceHash !== "" && tr.sourceHash !== currentSourceHash;
-              return (
-                <tr key={tr.id}>
-                  <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                    {lang ? `${lang.native} (${lang.name})` : tr.language}
-                    {isHostLanguage && <span className="ml-2 text-xs text-gray-500">(host)</span>}
-                    {isStale && <span className="ml-2 text-xs text-amber-600">(Source changed)</span>}
-                  </td>
-                  <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                    {getStatusBadge(tr.approval, tr.rejectionReason)}
-                  </td>
-                  <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                    {editingId === tr.id ? (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={handleSaveEdit}
-                          className="text-green-600 hover:text-green-900"
-                        >
-                          Save
-                        </button>
-                        <button
-                          onClick={() => setEditingId(null)}
-                          className="text-gray-600 hover:text-gray-900"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleEdit(tr)}
-                          className="text-indigo-600 hover:text-indigo-900"
-                        >
-                          Edit
-                        </button>
-                        {!tr.editedByHost && tr.approval === "NONE" && (
-                          <button
-                            onClick={() => handleRegenerate(tr)}
-                            className="text-blue-600 hover:text-blue-900"
-                          >
-                            Regenerate
-                          </button>
-                        )}
-                        {tr.approval === "NONE" && (
-                          <button
-                            onClick={() => handleSubmitApproval(tr)}
-                            className="text-green-600 hover:text-green-900"
-                          >
-                            Request approval
-                          </button>
-                        )}
-                        {tr.approval === "PENDING" && (
-                          <button
-                            onClick={handleRefreshStatus}
-                            className="text-amber-600 hover:text-amber-900"
-                          >
-                            Refresh
-                          </button>
-                        )}
-                        {!isHostLanguage && (
-                          <button
-                            onClick={() => handleRemove(tr)}
-                            className="text-red-600 hover:text-red-900"
-                          >
-                            Remove
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
+          <tbody className="divide-y divide-gray-200">
+            {translations.map((translation) => (
+              <TranslationRow
+                key={translation.id}
+                translation={translation}
+                template={template}
+                hostLanguage={hostLanguage}
+                language={languages.find((item) => item.code === translation.language)}
+                currentSourceHash={currentSourceHash}
+                requestedCategory={requestedCategory}
+              />
+            ))}
           </tbody>
         </table>
       </div>
 
-      {editingId && (
-        <div className="mt-4">
-          <textarea
-            value={editBody}
-            onChange={(e) => setEditBody(e.target.value)}
-            rows={4}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border p-2"
-          />
-        </div>
-      )}
-
-      {addingLanguage && (
-        <div className="mt-4 flex space-x-2">
+      <form action={addAction} className="flex flex-wrap items-end gap-2">
+        <input type="hidden" name="templateId" value={template.id} />
+        <label className="block">
+          <span className="mb-1 block text-sm">Add language</span>
           <select
+            name="language"
+            required
             value={selectedLanguage}
-            onChange={(e) => setSelectedLanguage(e.target.value)}
-            className="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border p-2"
+            onChange={(event) => setSelectedLanguage(event.target.value)}
+            className="rounded-md border p-2 text-sm"
           >
-            <option value="">Choose language...</option>
-            {languages
-              .filter((l) => !translations.some((t) => t.language === l.code))
-              .map((lang) => (
-                <option key={lang.code} value={lang.code}>
-                  {lang.native} ({lang.name})
-                </option>
-              ))}
+            <option value="">Choose language</option>
+            {availableLanguages.map((language) => (
+              <option key={language.code} value={language.code}>
+                {language.native} ({language.name})
+              </option>
+            ))}
           </select>
-          <button
-            onClick={handleAddTranslation}
-            disabled={!selectedLanguage}
-            className="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm hover:bg-indigo-700 disabled:opacity-50"
-          >
-            Add
-          </button>
-          <button
-            onClick={() => setAddingLanguage(false)}
-            className="bg-gray-200 text-gray-800 px-4 py-2 rounded-md text-sm hover:bg-gray-300"
-          >
-            Cancel
-          </button>
-        </div>
-      )}
-
-      {!addingLanguage && (
+        </label>
         <button
-          onClick={() => setAddingLanguage(true)}
-          className="mt-4 text-indigo-600 hover:text-indigo-900 text-sm"
+          disabled={!selectedLanguage || adding}
+          className="rounded-md border px-3 py-2 text-sm disabled:opacity-50"
         >
-          + Add translation
+          {adding ? "Translating..." : "Add translation"}
         </button>
-      )}
+        <ActionFeedback state={addState} />
+      </form>
     </div>
+  );
+}
+
+function TranslationRow({
+  translation,
+  template,
+  hostLanguage,
+  language,
+  currentSourceHash,
+  requestedCategory,
+}: {
+  translation: Translation;
+  template: MessageTemplate;
+  hostLanguage: string;
+  language: Language | undefined;
+  currentSourceHash: string;
+  requestedCategory: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [editBody, setEditBody] = useState(translation.body);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [editState, editAction, saving] = useActionState(editTranslationAction, undefined);
+  const [regenerateState, regenerateAction, regenerating] = useActionState(
+    regenerateTranslationAction,
+    undefined,
+  );
+  const [submitState, submitAction, submitting] = useActionState(
+    submitForApprovalAction,
+    undefined,
+  );
+  const [removeState, removeAction, removing] = useActionState(
+    removeTranslationAction,
+    undefined,
+  );
+  const isHostLanguage = translation.language === hostLanguage;
+  const isStale = !isHostLanguage && translation.sourceHash !== currentSourceHash;
+
+  return (
+    <tr>
+      <td className="px-3 py-3 align-top text-sm">
+        {language ? `${language.native} (${language.name})` : translation.language}
+        {isHostLanguage && <span className="ml-1 text-xs text-gray-500">(host)</span>}
+        {isStale && <span className="mt-1 block text-xs text-amber-700">Source changed</span>}
+      </td>
+      <td className="px-3 py-3 align-top text-sm">
+        <ApprovalStatus approval={translation.approval} rejectionReason={translation.rejectionReason} />
+        {translation.metaCategory && translation.metaCategory !== requestedCategory && (
+          <span className="mt-1 block text-xs text-amber-700">
+            Meta assigned {translation.metaCategory}; requested {requestedCategory}.
+          </span>
+        )}
+      </td>
+      <td className="px-3 py-3 text-sm">
+        {editing ? (
+          <form action={editAction} className="space-y-2">
+            <input type="hidden" name="translationId" value={translation.id} />
+            <textarea
+              name="body"
+              value={editBody}
+              onChange={(event) => {
+                setEditBody(event.target.value);
+                setValidationErrors(validateTemplate(template.type, event.target.value));
+              }}
+              rows={3}
+              dir="auto"
+              className="block w-full rounded-md border p-2"
+            />
+            {validationErrors.length > 0 && (
+              <ul className="list-inside list-disc text-xs text-red-700" role="alert">
+                {validationErrors.map((error) => <li key={error}>{error}</li>)}
+              </ul>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <button
+                disabled={saving || validationErrors.length > 0}
+                className="text-green-700 disabled:opacity-50"
+              >
+                {saving ? "Saving..." : "Save edit"}
+              </button>
+              <button type="button" onClick={() => setEditing(false)} className="text-gray-600">
+                Cancel
+              </button>
+            </div>
+            <ActionFeedback state={editState} />
+          </form>
+        ) : (
+          <p className="mb-2 whitespace-pre-wrap" dir="auto">{translation.body}</p>
+        )}
+
+        <div className="flex flex-wrap gap-x-3 gap-y-2 text-xs">
+          {!editing && (
+            <button type="button" onClick={() => setEditing(true)} className="text-blue-700">
+              Edit
+            </button>
+          )}
+          {!isHostLanguage && !translation.editedByHost && (
+            <form action={regenerateAction}>
+              <input type="hidden" name="templateId" value={template.id} />
+              <input type="hidden" name="language" value={translation.language} />
+              <button disabled={regenerating} className="text-blue-700 disabled:opacity-50">
+                {regenerating ? "Regenerating..." : "Regenerate"}
+              </button>
+              <ActionFeedback state={regenerateState} />
+            </form>
+          )}
+          <form action={submitAction}>
+            <input type="hidden" name="translationId" value={translation.id} />
+            <button
+              disabled={submitting || translation.approval === "PENDING" || isStale}
+              className="text-blue-700 disabled:opacity-50"
+            >
+              {submitting ? "Submitting..." : "Request approval"}
+            </button>
+            <ActionFeedback state={submitState} />
+          </form>
+          {!isHostLanguage && (
+            <form action={removeAction}>
+              <input type="hidden" name="translationId" value={translation.id} />
+              <button disabled={removing} className="text-red-700 disabled:opacity-50">
+                {removing ? "Removing..." : "Remove"}
+              </button>
+              <ActionFeedback state={removeState} />
+            </form>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function ApprovalStatus({
+  approval,
+  rejectionReason,
+}: {
+  approval: string;
+  rejectionReason: string | null;
+}) {
+  const label =
+    approval === "APPROVED"
+      ? "Approved"
+      : approval === "PENDING"
+        ? "Pending"
+        : approval === "REJECTED"
+          ? "Rejected"
+          : "Not submitted";
+  const color =
+    approval === "APPROVED"
+      ? "bg-green-100 text-green-800"
+      : approval === "PENDING"
+        ? "bg-yellow-100 text-yellow-800"
+        : approval === "REJECTED"
+          ? "bg-red-100 text-red-800"
+          : "bg-gray-100 text-gray-800";
+  return (
+    <span>
+      <span className={`inline-flex rounded px-2 py-1 text-xs font-medium ${color}`}>{label}</span>
+      {rejectionReason && <span className="mt-1 block max-w-xs text-xs text-gray-700">{rejectionReason}</span>}
+    </span>
   );
 }
