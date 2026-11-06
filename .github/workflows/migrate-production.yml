@@ -1,0 +1,55 @@
+name: Migrate production database
+
+# DRAFT — do not enable until the `production` environment has required
+# reviewers configured and the PRODUCTION_DATABASE_URL secret is set.
+#
+# Manual-only trigger: this workflow never runs on push, pull_request,
+# preview branches, or bot branches.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: migrate-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Check migration status
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          STATUS_OUTPUT=$(npx prisma migrate status 2>&1) || true
+          echo "$STATUS_OUTPUT"
+          if echo "$STATUS_OUTPUT" | grep -qiE "did not find.*_prisma_migrations|migration.*table.*not.*(exist|found)|P3005"; then
+            echo "::error::Prisma migration history table (_prisma_migrations) is missing on the production database. Refusing to run migrations — baseline the database first (see docs/RUNBOOK.md)."
+            exit 1
+          fi
+          if echo "$STATUS_OUTPUT" | grep -qiE "database schema is up to date|following migration.*have not yet been applied|following migration.*not yet been applied"; then
+            echo "Migration status OK (up to date or pending migrations only). Proceeding."
+          else
+            echo "::error::Could not confirm a safe migration state. Refusing to run migrations. Output was:"
+            echo "$STATUS_OUTPUT"
+            exit 1
+          fi
+
+      - name: Apply migrations
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+        run: npx prisma migrate deploy
