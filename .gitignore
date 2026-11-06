@@ -59,3 +59,7 @@ service-account.json
 secrets/
 *.secret
 secrets.*
+
+# Local throwaway test Postgres cluster
+.pgtest-data/
+.pgtest.log
