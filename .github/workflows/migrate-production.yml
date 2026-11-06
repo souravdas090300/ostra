@@ -8,6 +8,12 @@ name: Migrate production database
 
 on:
   workflow_dispatch:
+    inputs:
+      confirm_backup:
+        description: "I confirm a backup of the production database was taken"
+        type: boolean
+        required: true
+        default: false
 
 concurrency:
   group: migrate-production
@@ -23,6 +29,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Require backup confirmation
+        if: ${{ inputs.confirm_backup != true }}
+        run: |
+          echo "::error::Backup not confirmed. Re-run this workflow with 'confirm_backup' checked after taking a backup of the production database."
+          exit 1
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -30,24 +42,12 @@ jobs:
 
       - run: npm ci
 
+      - run: npx prisma generate
+
       - name: Check migration status
         env:
           DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
-        run: |
-          set -euo pipefail
-          STATUS_OUTPUT=$(npx prisma migrate status 2>&1) || true
-          echo "$STATUS_OUTPUT"
-          if echo "$STATUS_OUTPUT" | grep -qiE "did not find.*_prisma_migrations|migration.*table.*not.*(exist|found)|P3005"; then
-            echo "::error::Prisma migration history table (_prisma_migrations) is missing on the production database. Refusing to run migrations — baseline the database first (see docs/RUNBOOK.md)."
-            exit 1
-          fi
-          if echo "$STATUS_OUTPUT" | grep -qiE "database schema is up to date|following migration.*have not yet been applied|following migration.*not yet been applied"; then
-            echo "Migration status OK (up to date or pending migrations only). Proceeding."
-          else
-            echo "::error::Could not confirm a safe migration state. Refusing to run migrations. Output was:"
-            echo "$STATUS_OUTPUT"
-            exit 1
-          fi
+        run: node scripts/check-migration-status.mjs
 
       - name: Apply migrations
         env:
