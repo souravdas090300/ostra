@@ -60,7 +60,7 @@ Auth.js credentials provider (email + password, `bcryptjs`). `requireOwner()` he
 `prisma/seed.ts`: create one owner (email and password from env), 3 apartments, and a few sample bookings.
 Login page, protected `(app)` layout with nav: Calendar, Apartments, Inbox.
 GitHub Actions CI: install, lint, typecheck, test, build.
-Deploy to Vercel with a hosted Postgres (Neon). Run `prisma migrate deploy` in the build step.
+Deploy to Vercel with a hosted Postgres (Neon). Do not run `prisma migrate deploy` in the build step; apply migrations via the gated production workflow or manually after a backup.
 Acceptance
 - Visiting `/calendar` logged out redirects to `/login`.
 - Seeded owner can log in and log out.

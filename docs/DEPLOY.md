@@ -28,7 +28,9 @@ Your repository will be imported as a web service. Configure it:
 
 ### Build Settings
 - **Build Command**: `npm run build`
-- **Start Command**: `npx prisma migrate deploy && npm run start`
+- **Start Command**: `npm run start`
+
+Do not run `prisma migrate deploy` in the Start Command — it would apply migrations to production on every deploy with no approval gate. Run migrations only through the gated `migrate-production` GitHub Actions workflow (manual `workflow_dispatch`, `production` environment with required reviewers) or manually by an operator after taking a backup.
 
 ### Environment Variables
 

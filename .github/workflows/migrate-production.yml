@@ -1,0 +1,55 @@
+name: Migrate production database
+
+# DRAFT — do not enable until the `production` environment has required
+# reviewers configured and the PRODUCTION_DATABASE_URL secret is set.
+#
+# Manual-only trigger: this workflow never runs on push, pull_request,
+# preview branches, or bot branches.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_backup:
+        description: "I confirm a backup of the production database was taken"
+        type: boolean
+        required: true
+        default: false
+
+concurrency:
+  group: migrate-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require backup confirmation
+        if: ${{ inputs.confirm_backup != true }}
+        run: |
+          echo "::error::Backup not confirmed. Re-run this workflow with 'confirm_backup' checked after taking a backup of the production database."
+          exit 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npx prisma generate
+
+      - name: Check migration status
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+        run: node scripts/check-migration-status.mjs
+
+      - name: Apply migrations
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+        run: npx prisma migrate deploy
