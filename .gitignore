@@ -59,3 +59,7 @@ service-account.json
 secrets/
 *.secret
 secrets.*
+
+# Disposable local test Postgres cluster (never commit)
+.pgtest-data/
+.pgtest.log
