@@ -1,23 +1,15 @@
 import { defineConfig } from "vitest/config";
 import path from "path";
 import { loadEnv } from "vite";
+import { assertSafeTestDatabaseUrl } from "./lib/test-database-guard";
 
 export default defineConfig(() => {
   const testEnv = loadEnv("test", process.cwd(), "");
   const databaseUrl = process.env.DATABASE_URL ?? testEnv.DATABASE_URL ?? "";
-  let isDisposableDatabase = false;
-  try {
-    const parsedUrl = new URL(databaseUrl);
-    isDisposableDatabase =
-      ["postgres:", "postgresql:"].includes(parsedUrl.protocol) &&
-      parsedUrl.pathname === "/ostra_test" &&
-      ["localhost", "127.0.0.1", "::1"].includes(parsedUrl.hostname);
-  } catch {
-    isDisposableDatabase = false;
-  }
-  if (!isDisposableDatabase) {
-    throw new Error("Refusing to run tests: DATABASE_URL must target the disposable ostra_test database.");
-  }
+
+  // Refuse to run the suite against anything but a disposable *_test database
+  // on a non-production host — tests seed and delete tenant data.
+  assertSafeTestDatabaseUrl(databaseUrl);
 
   return {
     test: {
