@@ -1,0 +1,1 @@
+C:/Program Files/PostgreSQL/17/bin/postgres.exe "-D" "C:/dev/ostra/.pgtest-data" "-p" "5434"
