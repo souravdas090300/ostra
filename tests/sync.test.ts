@@ -18,6 +18,9 @@ vi.mock("@/lib/schedule", () => ({
 }));
 
 const fixturesPath = join(__dirname, "fixtures");
+// Fixed clock before the fixture events (2026-11-05 and 2026-12-01) so the
+// 7-day history cutoff never filters them out as real time moves on.
+const SYNC_NOW = new Date("2026-11-01T12:00:00.000Z");
 
 describe("sync integration tests", () => {
   let owner: { id: string };
@@ -69,7 +72,7 @@ describe("sync integration tests", () => {
       },
     });
 
-    const result = await syncFeed(feed.id);
+    const result = await syncFeed(feed.id, SYNC_NOW);
     expect(result.ok).toBe(true);
     expect(result.created).toBe(2);
     expect(result.updated).toBe(0);
@@ -106,10 +109,10 @@ describe("sync integration tests", () => {
       },
     });
 
-    const result1 = await syncFeed(feed.id);
+    const result1 = await syncFeed(feed.id, SYNC_NOW);
     expect(result1.created).toBe(2);
 
-    const result2 = await syncFeed(feed.id);
+    const result2 = await syncFeed(feed.id, SYNC_NOW);
     expect(result2.ok).toBe(true);
     expect(result2.created).toBe(0);
     expect(result2.updated).toBe(0);
@@ -129,7 +132,7 @@ describe("sync integration tests", () => {
       },
     });
 
-    const result1 = await syncFeed(feed.id);
+    const result1 = await syncFeed(feed.id, SYNC_NOW);
     expect(result1.ok).toBe(true);
 
     // Simulate feed change by updating the booking dates manually
@@ -138,7 +141,7 @@ describe("sync integration tests", () => {
       data: { checkIn: new Date("2026-11-06T14:00:00.000Z") },
     });
 
-    const result2 = await syncFeed(feed.id);
+    const result2 = await syncFeed(feed.id, SYNC_NOW);
     expect(result2.ok).toBe(true);
     expect(result2.updated).toBe(1);
 
@@ -157,14 +160,14 @@ describe("sync integration tests", () => {
       },
     });
 
-    const result1 = await syncFeed(feed.id);
+    const result1 = await syncFeed(feed.id, SYNC_NOW);
     expect(result1.ok).toBe(true);
 
     // Return empty feed
     const { fetchFeedText } = await import("@/lib/ical-fetch");
     vi.mocked(fetchFeedText).mockResolvedValue("BEGIN:VCALENDAR\nVERSION:2.0\nEND:VCALENDAR");
 
-    const result2 = await syncFeed(feed.id);
+    const result2 = await syncFeed(feed.id, SYNC_NOW);
     expect(result2.ok).toBe(true);
     expect(result2.cancelled).toBe(0); // empty feed with existing bookings keeps them with warning
     expect(result2.warning).toContain("no events");
@@ -174,7 +177,7 @@ describe("sync integration tests", () => {
       "BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nDTSTART;VALUE=DATE:20261201\nDTEND;VALUE=DATE:20261204\nUID:blocked1@airbnb.com\nSUMMARY:Airbnb (Not available)\nEND:VEVENT\nEND:VCALENDAR"
     );
 
-    const result3 = await syncFeed(feed.id);
+    const result3 = await syncFeed(feed.id, SYNC_NOW);
     expect(result3.ok).toBe(true);
     expect(result3.cancelled).toBe(1);
 
@@ -193,13 +196,13 @@ describe("sync integration tests", () => {
       },
     });
 
-    const result1 = await syncFeed(feed.id);
+    const result1 = await syncFeed(feed.id, SYNC_NOW);
     expect(result1.ok).toBe(true);
 
     const { fetchFeedText } = await import("@/lib/ical-fetch");
     vi.mocked(fetchFeedText).mockRejectedValue(new Error("Network error"));
 
-    const result2 = await syncFeed(feed.id);
+    const result2 = await syncFeed(feed.id, SYNC_NOW);
     expect(result2.ok).toBe(false);
     expect(result2.error).toBeDefined();
 
@@ -222,7 +225,7 @@ describe("sync integration tests", () => {
       },
     });
 
-    await syncFeed(feed.id);
+    await syncFeed(feed.id, SYNC_NOW);
 
     // Add host-entered fields
     await prisma.booking.updateMany({
@@ -234,7 +237,7 @@ describe("sync integration tests", () => {
       },
     });
 
-    await syncFeed(feed.id);
+    await syncFeed(feed.id, SYNC_NOW);
 
     const booking = await prisma.booking.findFirst({
       where: { externalUid: "AIRBNB:abc123@airbnb.com" },
@@ -265,7 +268,7 @@ describe("sync integration tests", () => {
       },
     });
 
-    await syncFeed(feed.id);
+    await syncFeed(feed.id, SYNC_NOW);
 
     const directBooking = await prisma.booking.findFirst({
       where: { source: "DIRECT" },
@@ -284,7 +287,7 @@ describe("sync integration tests", () => {
       },
     });
 
-    await syncFeed(feed.id);
+    await syncFeed(feed.id, SYNC_NOW);
 
     // Manually remove feed (simulating the action)
     await prisma.$transaction([
@@ -316,7 +319,7 @@ describe("sync integration tests", () => {
       },
     });
 
-    await syncFeed(feed.id);
+    await syncFeed(feed.id, SYNC_NOW);
     expect(rescheduleBookings).toHaveBeenCalled();
   });
 
