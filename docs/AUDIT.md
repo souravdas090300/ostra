@@ -137,3 +137,15 @@ The former auth skip (“returns owner with correct credentials”) is no longer
 - `@typescript-eslint/no-explicit-any: off` for `tests/**/*`, where Prisma mocks and test fixtures use loose generated shapes.
 
 No lint rule was added, disabled, or loosened by this change.
+
+## Phase 8 save-answer-to-info (Composer / appendToInfo)
+
+| Area | Evidence | Result |
+| ---- | -------- | ------ |
+| `appendToInfo` appends under `FROM GUEST QUESTIONS` once across calls | `app/(app)/inbox/actions.ts`; `tests/inbox-append-info-db.test.ts` "appends under the heading once across two calls" | Passed against PostgreSQL |
+| Private vs public target separation | `app/(app)/inbox/actions.ts`; `tests/inbox-append-info-db.test.ts` "writes to publicInfo without touching private info" | Passed against PostgreSQL |
+| Input limits: empty, >2000 chars, 20000/10000 field caps | `app/(app)/inbox/actions.ts`; `tests/inbox-append-info-db.test.ts` "rejects empty text and text over 2000 characters", "enforces the 20000-character private info limit", "enforces the 10000-character public info limit" | Passed against PostgreSQL |
+| Owner scoping | `app/(app)/inbox/actions.ts`; `tests/inbox-append-info-db.test.ts` "returns notFound for another owner's apartment" | Passed against PostgreSQL |
+| Saved answer reaches the assistant prompt | `lib/inbound.ts`, `lib/assistant-prompt.ts`; `tests/inbox-append-info-db.test.ts` "feeds the saved answer into the next answerInbound call's allowedText and prompt" | Passed against PostgreSQL |
+| Composer shows the save panel only when a reply resolved something | `components/MessageComposer.tsx`, `components/Composer.tsx` | Implemented; covered indirectly by the action tests |
+| Date-dependent sync tests | `tests/sync.test.ts` passes a fixed `SYNC_NOW` (2026-11-01) to `syncFeed` so the fixture events stay inside the 7-day history window; the suite was failing on main once real time passed 2026-11-15 | Passed |
