@@ -60,6 +60,6 @@ secrets/
 *.secret
 secrets.*
 
-# Local throwaway test Postgres cluster
+# Disposable local test Postgres cluster (never commit)
 .pgtest-data/
 .pgtest.log
