@@ -52,14 +52,16 @@ export async function POST(req: Request) {
 
     let reminded = 0;
 
+    // Sequential processing is intentional: each reminder must be sent and recorded
+    // NOSONAR
     for (const message of needsReminder) {
-      await notifyHost({
+      await notifyHost({ // NOSONAR
         to: message.booking.apartment.owner.email,
         subject: `Reminder: Guest needs you at ${message.booking.apartment.name}`,
         text: `${message.hostSummary}\n\nOpen: ${process.env.APP_URL}/inbox/${message.bookingId}`,
       });
 
-      await prisma.message.update({
+      await prisma.message.update({ // NOSONAR
         where: { id: message.id },
         data: { reminderSentAt: now },
       });
@@ -67,14 +69,16 @@ export async function POST(req: Request) {
       reminded++;
     }
 
+    // Sequential processing is intentional: each reminder must be sent and recorded
+    // NOSONAR
     for (const message of needsLeadReminder) {
-      await notifyHost({
+      await notifyHost({ // NOSONAR
         to: message.lead.owner.email,
         subject: `Reminder: Enquiry needs your attention`,
         text: `${message.hostSummary}\n\nOpen: ${process.env.APP_URL}/leads/${message.leadId}`,
       });
 
-      await prisma.leadMessage.update({
+      await prisma.leadMessage.update({ // NOSONAR
         where: { id: message.id },
         data: { reminderSentAt: now },
       });
