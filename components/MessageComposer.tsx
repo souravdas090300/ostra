@@ -96,7 +96,7 @@ export function MessageComposer({
       setText("");
       setPreview(null);
       setChecked(false);
-      if (hasUnresolved && suggestedQuestion && showSaveToInfo) {
+      if (markResolved && hasUnresolved && suggestedQuestion && showSaveToInfo) {
         setShowSave(true);
         setSaveText(`Q: ${suggestedQuestion}\nA: ${text}`);
       }
