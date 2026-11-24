@@ -12,7 +12,7 @@ vi.mock("@/lib/db", () => ({
     apartment: { findFirst: vi.fn() },
   },
 }));
-vi.mock("@anthropic-ai/sdk");
+vi.mock("@google/generative-ai");
 vi.mock("@/lib/usage", () => ({
   assertAiBudget: vi.fn(),
   recordUsage: vi.fn(),

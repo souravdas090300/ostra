@@ -1,10 +1,11 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { SchemaType, FunctionCallingMode, type FunctionDeclaration } from "@google/generative-ai";
 import { z } from "zod";
 import { buildSystemPrompt, type PromptInput } from "./assistant-prompt";
 import { normaliseLanguage } from "./languages";
 import { unsupportedContacts } from "./guards";
+import { getGoogleGenAI, GEMINI_MODEL } from "./llm-client";
+import { reportError } from "./report-error";
 
-const client = new Anthropic({ timeout: 25_000, maxRetries: 1 });
 export class AssistantError extends Error {}
 
 export type ChatTurn = { role: "user" | "assistant"; content: string };
@@ -19,19 +20,19 @@ export type AssistantOutput = {
   usage: { input: number; output: number };
 };
 
-const RESPOND_TOOL = {
+const RESPOND_TOOL: FunctionDeclaration = {
   name: "respond",
   description: "Send the reply to the guest and report what happened.",
-  input_schema: {
-    type: "object" as const,
+  parameters: {
+    type: SchemaType.OBJECT,
     properties: {
-      language: { type: "string", description: "ISO 639-1 code of the language of the guest's latest message (nb for Norwegian)." },
-      reply: { type: "string", description: "The WhatsApp message to send to the guest, in the guest's language." },
-      escalate: { type: "boolean", description: "True if the host must handle this." },
-      urgent: { type: "boolean", description: "True only for emergencies." },
-      reason: { type: "string", description: "Short English reason when escalate is true, otherwise empty." },
-      host_summary: { type: "string", description: "One or two sentences for the host, in the host's language." },
-      opt_out: { type: "boolean", description: "True if the guest asked to stop receiving messages." },
+      language: { type: SchemaType.STRING, description: "ISO 639-1 code of the language of the guest's latest message (nb for Norwegian)." },
+      reply: { type: SchemaType.STRING, description: "The WhatsApp message to send to the guest, in the guest's language." },
+      escalate: { type: SchemaType.BOOLEAN, description: "True if the host must handle this." },
+      urgent: { type: SchemaType.BOOLEAN, description: "True only for emergencies." },
+      reason: { type: SchemaType.STRING, description: "Short English reason when escalate is true, otherwise empty." },
+      host_summary: { type: SchemaType.STRING, description: "One or two sentences for the host, in the host's language." },
+      opt_out: { type: SchemaType.BOOLEAN, description: "True if the guest asked to stop receiving messages." },
     },
     required: ["language", "reply", "escalate", "urgent", "reason", "host_summary", "opt_out"],
   },
@@ -47,7 +48,6 @@ const outputSchema = z.object({
   opt_out: z.boolean(),
 });
 
-// Safe replies when the model cannot be used. Languages with no entry get English.
 export const HOLDING: Record<string, string> = {
   en: "Thanks for your message. I have passed it to your host, who will get back to you shortly.",
   it: "Grazie per il messaggio. L'ho inoltrato al tuo host, che ti risponderà al più presto.",
@@ -74,7 +74,6 @@ export function fallbackOutput(lang: string | null, reason: string, hostLanguage
 const TURN_MAX = 1000;
 type Stored = { direction: "INBOUND" | "OUTBOUND"; body: string };
 
-/** Alternating user/assistant turns that start with a user turn. Guest text is wrapped as untrusted data. */
 export function buildHistory(previous: Stored[], current: string): ChatTurn[] {
   const turns: ChatTurn[] = [];
   const push = (role: ChatTurn["role"], text: string) => {
@@ -96,27 +95,49 @@ export function buildHistory(previous: Stored[], current: string): ChatTurn[] {
 export type AnswerInput = PromptInput & { history: ChatTurn[]; allowedText: string };
 
 export async function answerGuest(input: AnswerInput): Promise<AssistantOutput> {
+  const model = getGoogleGenAI().getGenerativeModel({
+    model: GEMINI_MODEL,
+    systemInstruction: buildSystemPrompt(input),
+    tools: [{ functionDeclarations: [RESPOND_TOOL] }],
+    toolConfig: {
+      functionCallingConfig: {
+        mode: FunctionCallingMode.ANY,
+        allowedFunctionNames: ["respond"],
+      },
+    },
+  });
+
   let res;
   try {
-    res = await client.messages.create({
-      model: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5-5",
-      max_tokens: 800,
-      system: buildSystemPrompt(input),
-      tools: [RESPOND_TOOL],
-      tool_choice: { type: "tool", name: "respond" },
-      messages: input.history.map((t) => ({ role: t.role, content: t.content })),
+    // Gemini requires "model" instead of "assistant" for roles
+    const geminiHistory = input.history.slice(0, -1).map((t) => ({
+      role: t.role === "assistant" ? "model" : "user",
+      parts: [{ text: t.content }],
+    }));
+
+    // The last turn is always the current user message
+    const lastMessage = input.history[input.history.length - 1]?.content ?? "";
+
+    const chat = model.startChat({
+      history: geminiHistory.length > 0 ? geminiHistory : undefined,
     });
-  } catch {
+
+    res = await chat.sendMessage(lastMessage);
+  } catch (error) {
+    reportError(error, { job: "assistant" });
     throw new AssistantError("The AI service is unavailable.");
   }
-  const block = res.content.find((c) => c.type === "tool_use");
-  const parsed = block?.type === "tool_use" ? outputSchema.safeParse(block.input) : null;
+
+  const functionCalls = res.response.functionCalls();
+  const block = functionCalls?.find((c) => c.name === "respond");
+  const parsed = block ? outputSchema.safeParse(block.args) : null;
+
   if (!parsed?.success) throw new AssistantError("The AI returned an unusable answer.");
   const o = parsed.data;
 
   const usage = {
-    input: res.usage.input_tokens,
-    output: res.usage.output_tokens,
+    input: res.response.usageMetadata?.promptTokenCount || 0,
+    output: res.response.usageMetadata?.candidatesTokenCount || 0,
   };
 
   const out: AssistantOutput = {
@@ -130,27 +151,12 @@ export async function answerGuest(input: AnswerInput): Promise<AssistantOutput> 
     usage,
   };
 
-  // Code-level checks on what the model wrote.
   if (!out.reply || out.reply.length > 1200) {
-    return {
-      ...fallbackOutput(
-        out.language,
-        "The assistant produced an unusable reply.",
-        out.hostSummary || "A guest message needs your attention."
-      ),
-      optOut: out.optOut,
-    };
+    return { ...fallbackOutput(out.language, "The assistant produced an unusable reply.", out.hostSummary || "A guest message needs your attention."), optOut: out.optOut };
   }
   const bad = unsupportedContacts(out.reply, input.allowedText);
   if (bad) {
-    return {
-      ...fallbackOutput(
-        out.language,
-        "Assistant reply blocked: it contained a link or number that is not in your information.",
-        out.hostSummary || "A guest message needs your attention."
-      ),
-      optOut: out.optOut,
-    };
+    return { ...fallbackOutput(out.language, "Assistant reply blocked: it contained a link or number that is not in your information.", out.hostSummary || "A guest message needs your attention."), optOut: out.optOut };
   }
   if (out.urgent) out.escalate = true;
   return out;

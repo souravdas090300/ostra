@@ -19,8 +19,8 @@ export type TurnContext = {
     guests?: number;
     apartmentId?: string;
   };
-  allowedAmounts: Set<number>; // euros as numbers, from tool results only
-  allowedText: string; // public information, apartment names, tool text, for the link and number guard
+  allowedAmounts: Set<number>;
+  allowedText: string; 
 };
 
 type AvailabilityResult = {
@@ -40,27 +40,14 @@ type AvailabilityResult = {
 
 const CHECK_AVAILABILITY = {
   name: "check_availability",
-  description:
-    "Check availability and pricing for apartments. Always call this before quoting prices.",
-  input_schema: {
-    type: "object" as const,
+  description: "Check availability and pricing for apartments. Always call this before quoting prices.",
+  parameters: {
+    type: "object",
     properties: {
-      check_in: {
-        type: "string",
-        description: "Check-in date in YYYY-MM-DD format",
-      },
-      check_out: {
-        type: "string",
-        description: "Check-out date in YYYY-MM-DD format",
-      },
-      guests: {
-        type: "number",
-        description: "Number of guests (1-30)",
-      },
-      apartment_name: {
-        type: "string",
-        description: "Optional: specific apartment name to check",
-      },
+      check_in: { type: "string", description: "Check-in date in YYYY-MM-DD format" },
+      check_out: { type: "string", description: "Check-out date in YYYY-MM-DD format" },
+      guests: { type: "number", description: "Number of guests (1-30)" },
+      apartment_name: { type: "string", description: "Optional: specific apartment name to check" },
     },
     required: ["check_in", "check_out", "guests"],
   },
@@ -69,13 +56,10 @@ const CHECK_AVAILABILITY = {
 const GET_APARTMENT_INFO = {
   name: "get_apartment_info",
   description: "Get public information about an apartment (never private details like codes or address).",
-  input_schema: {
-    type: "object" as const,
+  parameters: {
+    type: "object",
     properties: {
-      apartment_name: {
-        type: "string",
-        description: "Name of the apartment",
-      },
+      apartment_name: { type: "string", description: "Name of the apartment" },
     },
     required: ["apartment_name"],
   },
@@ -84,29 +68,14 @@ const GET_APARTMENT_INFO = {
 const SAVE_LEAD_DETAILS = {
   name: "save_lead_details",
   description: "Save or update the lead's enquiry details (dates, guests, apartment preference).",
-  input_schema: {
-    type: "object" as const,
+  parameters: {
+    type: "object",
     properties: {
-      name: {
-        type: "string",
-        description: "Guest's first name (max 60 characters)",
-      },
-      check_in: {
-        type: "string",
-        description: "Check-in date in YYYY-MM-DD format",
-      },
-      check_out: {
-        type: "string",
-        description: "Check-out date in YYYY-MM-DD format",
-      },
-      guests: {
-        type: "number",
-        description: "Number of guests",
-      },
-      apartment_name: {
-        type: "string",
-        description: "Preferred apartment name",
-      },
+      name: { type: "string", description: "Guest's first name (max 60 characters)" },
+      check_in: { type: "string", description: "Check-in date in YYYY-MM-DD format" },
+      check_out: { type: "string", description: "Check-out date in YYYY-MM-DD format" },
+      guests: { type: "number", description: "Number of guests" },
+      apartment_name: { type: "string", description: "Preferred apartment name" },
     },
     required: [],
   },
@@ -115,17 +84,11 @@ const SAVE_LEAD_DETAILS = {
 const HANDOFF_TO_HOST = {
   name: "handoff_to_host",
   description: "Escalate the conversation to the host. Use this for questions the AI cannot answer, payment discussions, special requests, or when unsure.",
-  input_schema: {
-    type: "object" as const,
+  parameters: {
+    type: "object",
     properties: {
-      reason: {
-        type: "string",
-        description: "Short English reason for the handoff (max 300 characters)",
-      },
-      urgent: {
-        type: "boolean",
-        description: "True only for emergencies or urgent issues",
-      },
+      reason: { type: "string", description: "Short English reason for the handoff (max 300 characters)" },
+      urgent: { type: "boolean", description: "True only for emergencies or urgent issues" },
     },
     required: ["reason"],
   },
@@ -134,71 +97,31 @@ const HANDOFF_TO_HOST = {
 const MARK_DO_NOT_CONTACT = {
   name: "mark_do_not_contact",
   description: "Mark the lead as opting out when the guest asks to stop receiving messages.",
-  input_schema: {
-    type: "object" as const,
-    properties: {},
-    required: [],
-  },
+  parameters: { type: "object", properties: {}, required: [] },
 };
 
 const RESPOND = {
   name: "respond",
   description: "Send the reply to the guest and report what happened. This is the last tool call.",
-  input_schema: {
-    type: "object" as const,
+  parameters: {
+    type: "object",
     properties: {
-      language: {
-        type: "string",
-        description:
-          "ISO 639-1 code of the language of the guest's latest message (nb for Norwegian).",
-      },
-      reply: {
-        type: "string",
-        description: "The WhatsApp message to send to the guest, in the guest's language.",
-      },
-      escalate: {
-        type: "boolean",
-        description: "True if the host must handle this.",
-      },
-      urgent: {
-        type: "boolean",
-        description: "True only for emergencies.",
-      },
-      reason: {
-        type: "string",
-        description: "Short English reason when escalate is true, otherwise empty.",
-      },
-      host_summary: {
-        type: "string",
-        description: "One or two sentences for the host, in the host's language.",
-      },
-      opt_out: {
-        type: "boolean",
-        description: "True if the guest asked to stop receiving messages.",
-      },
+      language: { type: "string", description: "ISO 639-1 code of the language of the guest's latest message (nb for Norwegian)." },
+      reply: { type: "string", description: "The WhatsApp message to send to the guest, in the guest's language." },
+      escalate: { type: "boolean", description: "True if the host must handle this." },
+      urgent: { type: "boolean", description: "True only for emergencies." },
+      reason: { type: "string", description: "Short English reason when escalate is true, otherwise empty." },
+      host_summary: { type: "string", description: "One or two sentences for the host, in the host's language." },
+      opt_out: { type: "boolean", description: "True if the guest asked to stop receiving messages." },
     },
     required: ["language", "reply", "escalate", "urgent", "reason", "host_summary", "opt_out"],
   },
 };
 
-const checkAvailabilityInput = z.object({
-  check_in: z.string(),
-  check_out: z.string(),
-  guests: z.number(),
-  apartment_name: z.string().optional(),
-});
+const checkAvailabilityInput = z.object({ check_in: z.string(), check_out: z.string(), guests: z.number(), apartment_name: z.string().optional() });
 const apartmentInfoInput = z.object({ apartment_name: z.string() });
-const saveLeadDetailsInput = z.object({
-  name: z.string().optional(),
-  check_in: z.string().optional(),
-  check_out: z.string().optional(),
-  guests: z.number().optional(),
-  apartment_name: z.string().optional(),
-});
-const handoffInput = z.object({
-  reason: z.string(),
-  urgent: z.boolean().optional(),
-});
+const saveLeadDetailsInput = z.object({ name: z.string().optional(), check_in: z.string().optional(), check_out: z.string().optional(), guests: z.number().optional(), apartment_name: z.string().optional() });
+const handoffInput = z.object({ reason: z.string(), urgent: z.boolean().optional() });
 const doNotContactInput = z.object({});
 
 export const dataTools = [CHECK_AVAILABILITY, GET_APARTMENT_INFO, SAVE_LEAD_DETAILS, HANDOFF_TO_HOST, MARK_DO_NOT_CONTACT];
