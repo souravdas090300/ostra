@@ -116,7 +116,7 @@ export async function answerGuest(input: AnswerInput): Promise<AssistantOutput> 
     }));
 
     // The last turn is always the current user message
-    const lastMessage = input.history[input.history.length - 1]?.content ?? "";
+    const lastMessage = input.history.at(-1)?.content ?? "";
 
     const chat = model.startChat({
       history: geminiHistory.length > 0 ? geminiHistory : undefined,
