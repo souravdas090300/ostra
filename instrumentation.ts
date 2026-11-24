@@ -70,3 +70,18 @@ function scrubValue(value: string): string {
   scrubbed = scrubbed.replace(/\/api\/ical\/[A-Za-z0-9_-]{20,64}(?:\.ics)?/g, "/api/ical/[redacted]");
   return scrubbed;
 }
+
+export async function register() {
+  if (process.env.NEXT_RUNTIME !== "nodejs") return;
+  if (process.env.ENABLE_IN_PROCESS_SCHEDULER !== "1") return;
+
+  const g = globalThis as { __ostraSchedulerRegistered?: boolean };
+  if (g.__ostraSchedulerRegistered) return;
+  g.__ostraSchedulerRegistered = true;
+
+  const { runTick } = await import("./lib/scheduler");
+  const { reportError } = await import("./lib/report-error");
+  setInterval(() => {
+    runTick().catch((e) => reportError(e, { job: "tick" }));
+  }, 60_000);
+}
