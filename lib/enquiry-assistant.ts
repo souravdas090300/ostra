@@ -51,7 +51,7 @@ type Stored = { direction: "INBOUND" | "OUTBOUND"; body: string };
 export function buildEnquiryHistory(previous: Stored[], current: string): Content[] {
   const turns: Content[] = [];
   const push = (role: "user" | "model", text: string) => {
-    const last = turns[turns.length - 1];
+    const last = turns.at(-1);
     const part = last?.parts[0];
     if (last && last.role === role && part && "text" in part && part.text !== undefined) {
       part.text += `\n${text}`;
@@ -128,7 +128,7 @@ export async function answerEnquiry(input: EnquiryInput): Promise<EnquiryOutput>
   });
 
   const chat = model.startChat({ history: input.history.slice(0, -1) });
-  const lastPart = input.history[input.history.length - 1]?.parts[0];
+  const lastPart = input.history.at(-1)?.parts[0];
   const currentMessage =
     lastPart && "text" in lastPart ? (lastPart.text ?? "") : "";
 
