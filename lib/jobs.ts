@@ -4,15 +4,20 @@
 // - Rate limiting of external API calls (email notifications)
 // These patterns are copied from the original job implementations.
 
-import { sendDueMessages } from "./send-scheduled";
-import { syncAllFeeds } from "./sync";
-import { syncApprovals } from "./template-approval";
-import { runRetention } from "./retention";
-import { buildWeeklySummary, getIsoWeekString } from "./weekly-summary";
-import { processLeadFollowUps } from "./lead-follow-up";
+import { sendDueMessages } from './send-scheduled';
+import { syncAllFeeds } from './sync';
+import { syncApprovals } from './template-approval';
+import { runRetention } from './retention';
+import { buildWeeklySummary, getIsoWeekString } from './weekly-summary';
+import { processLeadFollowUps } from './lead-follow-up';
 
 export type JobDef =
-  | { name: string; every: number; run: () => Promise<Record<string, number>>; maxDuration?: number }
+  | {
+      name: string;
+      every: number;
+      run: () => Promise<Record<string, number>>;
+      maxDuration?: number;
+    }
   | {
       name: string;
       at: { hourUtc: number; minute: number; weekdayUtc?: number };
@@ -34,11 +39,10 @@ export const sendDueMessagesJob = async (): Promise<Record<string, number>> => {
 
 export const inboundRecoveryJob = async (): Promise<Record<string, number>> => {
   // Reuse the existing inbound-recovery logic
-  const { withJobRun } = await import("./job-run");
-  const result = await withJobRun("inbound-recovery", async () => {
-    const { prisma } = await import("./db");
-    const { notifyHost } = await import("./notify");
-    const { revalidatePath } = await import("next/cache");
+  const result = await (async () => {
+    const { prisma } = await import('./db');
+    const { notifyHost } = await import('./notify');
+    const { revalidatePath } = await import('next/cache');
 
     const now = new Date();
     const threeMinutesAgo = new Date(now.getTime() - 3 * 60_000);
@@ -47,10 +51,10 @@ export const inboundRecoveryJob = async (): Promise<Record<string, number>> => {
 
     const unansweredMessages = await prisma.message.findMany({
       where: {
-        direction: "INBOUND",
-        author: "GUEST",
+        direction: 'INBOUND',
+        author: 'GUEST',
         escalated: false,
-        createdAt: { gte: threeMinutesAgo, lte: twentyFourHoursAgo },
+        createdAt: { lte: threeMinutesAgo, gte: twentyFourHoursAgo },
       },
       include: {
         booking: {
@@ -73,7 +77,7 @@ export const inboundRecoveryJob = async (): Promise<Record<string, number>> => {
       const hasReply = await prisma.message.count({
         where: {
           bookingId: message.bookingId,
-          direction: "OUTBOUND",
+          direction: 'OUTBOUND',
           createdAt: { gt: message.createdAt },
         },
       });
@@ -83,7 +87,7 @@ export const inboundRecoveryJob = async (): Promise<Record<string, number>> => {
       const floodCount = await prisma.message.count({
         where: {
           bookingId: message.bookingId,
-          direction: "INBOUND",
+          direction: 'INBOUND',
           createdAt: { gte: oneHourAgo },
         },
       });
@@ -94,8 +98,10 @@ export const inboundRecoveryJob = async (): Promise<Record<string, number>> => {
         where: { id: message.id },
         data: {
           escalated: true,
-          escalationReason: "No reply was sent (the system restarted). Please answer.",
-          hostSummary: "A guest message was not answered automatically. Please reply.",
+          escalationReason:
+            'No reply was sent (the system restarted). Please answer.',
+          hostSummary:
+            'A guest message was not answered automatically. Please reply.',
         },
       });
 
@@ -108,10 +114,10 @@ export const inboundRecoveryJob = async (): Promise<Record<string, number>> => {
       escalated++;
     }
 
-    revalidatePath("/inbox");
+    revalidatePath('/inbox');
 
     return { escalated };
-  });
+  })();
   return result;
 };
 
@@ -126,12 +132,13 @@ export const syncAllFeedsJob = async (): Promise<Record<string, number>> => {
   };
 };
 
-export const escalationRemindersJob = async (): Promise<Record<string, number>> => {
-  const { withJobRun } = await import("./job-run");
-  const result = await withJobRun("escalation-reminders", async () => {
-    const { prisma } = await import("./db");
-    const { notifyHost } = await import("./notify");
-    const { revalidatePath } = await import("next/cache");
+export const escalationRemindersJob = async (): Promise<
+  Record<string, number>
+> => {
+  const result = await (async () => {
+    const { prisma } = await import('./db');
+    const { notifyHost } = await import('./notify');
+    const { revalidatePath } = await import('next/cache');
 
     const now = new Date();
     const oneHourAgo = new Date(now.getTime() - 60 * 60_000);
@@ -207,21 +214,24 @@ export const escalationRemindersJob = async (): Promise<Record<string, number>> 
       reminded++;
     }
 
-    revalidatePath("/inbox");
-    revalidatePath("/leads");
+    revalidatePath('/inbox');
+    revalidatePath('/leads');
 
-    return { reminded, bookingReminders: needsReminder.length, leadReminders: needsLeadReminder.length };
-  });
+    return {
+      reminded,
+      bookingReminders: needsReminder.length,
+      leadReminders: needsLeadReminder.length,
+    };
+  })();
   return result;
 };
 
 export const selfCheckJob = async (): Promise<Record<string, number>> => {
-  const { withJobRun } = await import("./job-run");
-  const result = await withJobRun("self-check", async () => {
-    const { prisma } = await import("./db");
-    const { notifyHost } = await import("./notify");
-    const { revalidatePath } = await import("next/cache");
-    const { linkState } = await import("./export-feeds");
+  const result = await (async () => {
+    const { prisma } = await import('./db');
+    const { notifyHost } = await import('./notify');
+    const { revalidatePath } = await import('next/cache');
+    const { linkState } = await import('./export-feeds');
 
     const OPERATOR_EMAIL = process.env.OPERATOR_EMAIL;
     const now = new Date();
@@ -230,13 +240,13 @@ export const selfCheckJob = async (): Promise<Record<string, number>> => {
     // Check last successful run times
     const staleJobs = await checkStaleJobs(now);
     if (staleJobs.length > 0) {
-      alerts.push(`Stale jobs: ${staleJobs.join(", ")}`);
+      alerts.push(`Stale jobs: ${staleJobs.join(', ')}`);
     }
 
     // Check overdue scheduled messages
     const overduePending = await prisma.scheduledMessage.count({
       where: {
-        status: "PENDING",
+        status: 'PENDING',
         sendAt: { lt: new Date(now.getTime() - 30 * 60_000) },
       },
     });
@@ -247,20 +257,22 @@ export const selfCheckJob = async (): Promise<Record<string, number>> => {
     // Check failed messages in last 24 hours
     const failedScheduled = await prisma.scheduledMessage.count({
       where: {
-        status: "FAILED",
+        status: 'FAILED',
         lastError: { not: null },
         createdAt: { gte: new Date(now.getTime() - 24 * 60 * 60_000) },
       },
     });
     const failedOutbound = await prisma.message.count({
       where: {
-        direction: "OUTBOUND",
-        deliveryStatus: { in: ["failed", "undelivered"] },
+        direction: 'OUTBOUND',
+        deliveryStatus: { in: ['failed', 'undelivered'] },
         createdAt: { gte: new Date(now.getTime() - 24 * 60 * 60_000) },
       },
     });
     if (failedScheduled > 0 || failedOutbound > 0) {
-      alerts.push(`${failedScheduled} failed scheduled, ${failedOutbound} failed outbound messages`);
+      alerts.push(
+        `${failedScheduled} failed scheduled, ${failedOutbound} failed outbound messages`
+      );
     }
 
     // Check unresolved urgent escalations
@@ -273,7 +285,9 @@ export const selfCheckJob = async (): Promise<Record<string, number>> => {
       },
     });
     if (urgentEscalations > 0) {
-      alerts.push(`${urgentEscalations} unresolved urgent escalations older than 15 min`);
+      alerts.push(
+        `${urgentEscalations} unresolved urgent escalations older than 15 min`
+      );
     }
 
     // Check feeds with errors
@@ -287,7 +301,9 @@ export const selfCheckJob = async (): Promise<Record<string, number>> => {
       },
     });
     if (feedsWithErrors > 0) {
-      alerts.push(`${feedsWithErrors} feeds with errors or no success for 3 hours`);
+      alerts.push(
+        `${feedsWithErrors} feeds with errors or no success for 3 hours`
+      );
     }
 
     // Check export feeds for stale or waiting links
@@ -298,12 +314,12 @@ export const selfCheckJob = async (): Promise<Record<string, number>> => {
     const staleHours = Number(process.env.EXPORT_STALE_AFTER_HOURS ?? 48);
     for (const feed of exportFeeds) {
       const state = linkState(feed, now, staleHours);
-      if (state === "STALE") {
+      if (state === 'STALE') {
         alerts.push(
           `Export feed ${feed.target} for apartment ${feed.apartment.name} (${feed.apartmentId}) is stale (not read for ${staleHours}+ hours)`
         );
       } else if (
-        state === "WAITING" &&
+        state === 'WAITING' &&
         feed.enabledAt &&
         now.getTime() - feed.enabledAt.getTime() > 48 * 60 * 60_000
       ) {
@@ -322,7 +338,7 @@ export const selfCheckJob = async (): Promise<Record<string, number>> => {
         where: {
           apartmentId: feed.apartmentId,
           source: feed.target,
-          status: "CONFIRMED",
+          status: 'CONFIRMED',
           createdAt: { gt: feed.enabledAt },
         },
         select: { id: true, checkIn: true, checkOut: true },
@@ -333,7 +349,7 @@ export const selfCheckJob = async (): Promise<Record<string, number>> => {
             apartmentId: feed.apartmentId,
             id: { not: pb.id },
             source: { not: feed.target },
-            status: "CONFIRMED",
+            status: 'CONFIRMED',
             checkIn: pb.checkIn,
             checkOut: pb.checkOut,
           },
@@ -349,23 +365,23 @@ export const selfCheckJob = async (): Promise<Record<string, number>> => {
 
     // Check if this is a new alert state
     const lastRun = await prisma.jobRun.findFirst({
-      where: { job: "self-check", ok: true },
-      orderBy: { startedAt: "desc" },
+      where: { job: 'self-check', ok: true },
+      orderBy: { startedAt: 'desc' },
     });
-    const wasOk = lastRun && !lastRun.summary?.includes("alerts");
+    const wasOk = lastRun && !lastRun.summary?.includes('alerts');
     const isDegraded = alerts.length > 0;
 
     if (isDegraded && (wasOk || !lastRun)) {
       if (OPERATOR_EMAIL) {
         await notifyHost({
           to: OPERATOR_EMAIL,
-          subject: "Ostra self-check: degraded",
-          text: `Self-check found problems:\n\n${alerts.join("\n")}\n\nCheck /settings/status`,
+          subject: 'Ostra self-check: degraded',
+          text: `Self-check found problems:\n\n${alerts.join('\n')}\n\nCheck /settings/status`,
         });
       }
     }
 
-    revalidatePath("/settings/status");
+    revalidatePath('/settings/status');
 
     return {
       staleJobs: staleJobs.length,
@@ -376,13 +392,12 @@ export const selfCheckJob = async (): Promise<Record<string, number>> => {
       feedsWithErrors,
       alerts: alerts.length,
     };
-  });
+  })();
   return result;
 };
 
 export const leadFollowUpsJob = async (): Promise<Record<string, number>> => {
-  const { withJobRun } = await import("./job-run");
-  const result = await withJobRun("lead-follow-ups", async () => {
+  const result = await (async () => {
     const hours = Number(process.env.LEAD_FOLLOW_UP_AFTER_HOURS ?? 16);
     const { processed, sent, skipped } = await processLeadFollowUps(hours);
     return {
@@ -391,7 +406,7 @@ export const leadFollowUpsJob = async (): Promise<Record<string, number>> => {
       skipped,
       hours,
     };
-  });
+  })();
   return result;
 };
 
@@ -406,11 +421,10 @@ export const retentionJob = async (): Promise<Record<string, number>> => {
 };
 
 export const weeklySummaryJob = async (): Promise<Record<string, number>> => {
-  const { withJobRun } = await import("./job-run");
-  const result = await withJobRun("weekly-summary", async () => {
-    const { prisma } = await import("./db");
-    const { notifyHost } = await import("./notify");
-    const { reportError } = await import("./report-error");
+  const result = await (async () => {
+    const { prisma } = await import('./db');
+    const { notifyHost } = await import('./notify');
+    const { reportError } = await import('./report-error');
 
     const now = new Date();
     const currentIsoWeek = getIsoWeekString(now);
@@ -448,7 +462,7 @@ export const weeklySummaryJob = async (): Promise<Record<string, number>> => {
 
         sent++;
       } catch (e) {
-        reportError(e, { ownerId: owner.id, job: "weekly-summary" });
+        reportError(e, { ownerId: owner.id, job: 'weekly-summary' });
         failed++;
       }
     }
@@ -459,39 +473,42 @@ export const weeklySummaryJob = async (): Promise<Record<string, number>> => {
       skipped,
       failed,
     };
-  });
+  })();
   return result;
 };
 
 async function checkStaleJobs(now: Date): Promise<string[]> {
-  const { prisma } = await import("./db");
+  const { prisma } = await import('./db');
   const stale: string[] = [];
 
   // Check if tick itself has not run (no JobRun for any job in 5 minutes)
   const latestAnyJob = await prisma.jobRun.findFirst({
-    orderBy: { startedAt: "desc" },
+    orderBy: { startedAt: 'desc' },
   });
-  if (!latestAnyJob || new Date(now.getTime() - 5 * 60_000) > latestAnyJob.startedAt) {
-    stale.push("tick");
+  if (
+    !latestAnyJob ||
+    new Date(now.getTime() - 5 * 60_000) > latestAnyJob.startedAt
+  ) {
+    stale.push('tick');
   }
 
   // Check individual job staleness (twice their interval)
   const thresholds: Record<string, number> = {
-    "sync-calendars": 60 * 60_000, // 2x 30 minutes
-    "send-scheduled": 10 * 60_000, // 2x 5 minutes
-    "escalation-reminders": 30 * 60_000, // 2x 15 minutes
-    "sync-templates": 120 * 60_000, // 2x 60 minutes
-    "retention": 72 * 60 * 60_000, // 2x 36 hours
-    "inbound-recovery": 10 * 60_000, // 2x 5 minutes
-    "weekly-summary": 16 * 24 * 60 * 60_000, // 2x 8 days
-    "lead-follow-ups": 30 * 60_000, // 2x 15 minutes
-    "self-check": 30 * 60_000, // 2x 15 minutes
+    'sync-calendars': 60 * 60_000, // 2x 30 minutes
+    'send-scheduled': 10 * 60_000, // 2x 5 minutes
+    'escalation-reminders': 30 * 60_000, // 2x 15 minutes
+    'sync-templates': 120 * 60_000, // 2x 60 minutes
+    retention: 72 * 60 * 60_000, // 2x 36 hours
+    'inbound-recovery': 10 * 60_000, // 2x 5 minutes
+    'weekly-summary': 16 * 24 * 60 * 60_000, // 2x 8 days
+    'lead-follow-ups': 30 * 60_000, // 2x 15 minutes
+    'self-check': 30 * 60_000, // 2x 15 minutes
   };
 
   for (const [job, threshold] of Object.entries(thresholds)) {
     const lastOk = await prisma.jobRun.findFirst({
       where: { job, ok: true },
-      orderBy: { startedAt: "desc" },
+      orderBy: { startedAt: 'desc' },
     });
     if (!lastOk || new Date(now.getTime() - threshold) > lastOk.startedAt) {
       stale.push(job);
@@ -502,13 +519,22 @@ async function checkStaleJobs(now: Date): Promise<string[]> {
 }
 
 export const JOBS: JobDef[] = [
-  { name: "send-scheduled", every: 5, run: sendDueMessagesJob },
-  { name: "inbound-recovery", every: 5, run: inboundRecoveryJob },
-  { name: "sync-calendars", every: 30, run: syncAllFeedsJob, maxDuration: 20 },
-  { name: "escalation-reminders", every: 15, run: escalationRemindersJob },
-  { name: "self-check", every: 15, run: selfCheckJob },
-  { name: "lead-follow-ups", every: 15, run: leadFollowUpsJob },
-  { name: "sync-templates", every: 60, run: syncApprovalsJob },
-  { name: "retention", at: { hourUtc: 1, minute: 30 }, run: retentionJob, maxDuration: 20 },
-  { name: "weekly-summary", at: { hourUtc: 6, minute: 0, weekdayUtc: 1 }, run: weeklySummaryJob },
+  { name: 'send-scheduled', every: 5, run: sendDueMessagesJob },
+  { name: 'inbound-recovery', every: 5, run: inboundRecoveryJob },
+  { name: 'sync-calendars', every: 30, run: syncAllFeedsJob, maxDuration: 20 },
+  { name: 'escalation-reminders', every: 15, run: escalationRemindersJob },
+  { name: 'self-check', every: 15, run: selfCheckJob },
+  { name: 'lead-follow-ups', every: 15, run: leadFollowUpsJob },
+  { name: 'sync-templates', every: 60, run: syncApprovalsJob },
+  {
+    name: 'retention',
+    at: { hourUtc: 1, minute: 30 },
+    run: retentionJob,
+    maxDuration: 20,
+  },
+  {
+    name: 'weekly-summary',
+    at: { hourUtc: 6, minute: 0, weekdayUtc: 1 },
+    run: weeklySummaryJob,
+  },
 ];
