@@ -1,21 +1,13 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { FunctionCallingMode, type Content, type FunctionDeclaration, type Part } from "@google/generative-ai";
 import { z } from "zod";
-import { buildSystemPrompt, type PromptInput } from "./assistant-prompt";
 import { normaliseLanguage } from "./languages";
 import { unsupportedContacts } from "./guards";
 import { unsupportedAmounts } from "./enquiry-guards";
-import {
-  dataTools,
-  RESPOND_TOOL,
-  runTool,
-  type TurnContext,
-} from "./enquiry-tools";
-import { assertAiBudget, recordUsage, checkAndSendBudgetWarning, BudgetExceededError } from "./usage";
-import { getAnthropic } from "./flags";
+import { dataTools, RESPOND_TOOL, runTool, type TurnContext } from "./enquiry-tools";
+import { assertAiBudget, recordUsage, BudgetExceededError } from "./usage";
 import { assistantEnabled } from "./flags";
+import { getGoogleGenAI, GEMINI_MODEL } from "./llm-client";
 
-const client = new Anthropic({ timeout: 25_000, maxRetries: 1 });
-type MessageParam = Anthropic.Messages.MessageParam;
 export class EnquiryAssistantError extends Error {}
 
 export type EnquiryOutput = {
@@ -39,7 +31,6 @@ const outputSchema = z.object({
   opt_out: z.boolean(),
 });
 
-// Safe replies when the model cannot be used
 export const HOLDING: Record<string, string> = {
   en: "Thanks for your message. I have passed it to your host, who will get back to you shortly.",
   it: "Grazie per il messaggio. L'ho inoltrato al tuo host, che ti risponderà al più presto.",
@@ -50,44 +41,32 @@ export const HOLDING: Record<string, string> = {
 };
 export const holdingText = (lang: string | null) => HOLDING[lang ?? "en"] ?? HOLDING.en;
 
-export function fallbackOutput(
-  lang: string | null,
-  reason: string,
-  hostLanguageSummary: string,
-): EnquiryOutput {
-  return {
-    language: lang,
-    reply: holdingText(lang),
-    escalate: true,
-    urgent: false,
-    reason,
-    hostSummary: hostLanguageSummary,
-    optOut: false,
-    usage: { input: 0, output: 0 },
-  };
+export function fallbackOutput(lang: string | null, reason: string, hostLanguageSummary: string): EnquiryOutput {
+  return { language: lang, reply: holdingText(lang), escalate: true, urgent: false, reason, hostSummary: hostLanguageSummary, optOut: false, usage: { input: 0, output: 0 } };
 }
 
 type Stored = { direction: "INBOUND" | "OUTBOUND"; body: string };
 
-/** Alternating user/assistant turns that start with a user turn. Guest text is wrapped as untrusted data. */
-export function buildEnquiryHistory(previous: Stored[], current: string): MessageParam[] {
-  const turns: MessageParam[] = [];
-  const push = (role: "user" | "assistant", text: string) => {
+/** Alternating user/model turns that start with a user turn. Guest text is wrapped as untrusted data. */
+export function buildEnquiryHistory(previous: Stored[], current: string): Content[] {
+  const turns: Content[] = [];
+  const push = (role: "user" | "model", text: string) => {
     const last = turns[turns.length - 1];
-    if (last && last.role === role && typeof last.content === "string") {
-      last.content += `\n${text}`;
+    const part = last?.parts[0];
+    if (last && last.role === role && part && "text" in part && part.text !== undefined) {
+      part.text += `\n${text}`;
     } else {
-      turns.push({ role, content: text });
+      turns.push({ role, parts: [{ text }] });
     }
   };
   for (const m of previous) {
     const body = m.body.slice(0, 1000);
     if (m.direction === "INBOUND") push("user", `<guest_message>${body}</guest_message>`);
-    else push("assistant", body);
+    else push("model", body);
   }
   push("user", `<guest_message>${current.slice(0, 1000)}</guest_message>`);
-  if (turns[0].role === "assistant")
-    turns.unshift({ role: "user", content: "(The conversation started with the host's automatic message.)" });
+  if (turns[0]?.role === "model")
+    turns.unshift({ role: "user", parts: [{ text: "(The conversation started with the host's automatic message.)" }] });
   return turns;
 }
 
@@ -96,22 +75,12 @@ export type EnquiryInput = {
   today: string;
   knownLanguage: string | null;
   apartmentNames?: string[];
-  history: MessageParam[];
+  history: Content[];
   allowedText: string;
   ctx: TurnContext;
 };
 
-export function buildEnquiryPrompt({
-  hostLanguage,
-  today,
-  knownLanguage,
-  apartmentNames,
-}: {
-  hostLanguage: string;
-  today: string;
-  knownLanguage: string | null;
-  apartmentNames?: string[];
-}): string {
+export function buildEnquiryPrompt({ hostLanguage, today, knownLanguage, apartmentNames }: { hostLanguage: string; today: string; knownLanguage: string | null; apartmentNames?: string[]; }): string {
   return `You are the booking-enquiry assistant of a holiday-rental host in Malta. You answer WhatsApp messages from someone who is asking about availability or prices. You are the host's virtual assistant, never a human.
 
 TODAY IN MALTA: ${today}
@@ -133,64 +102,57 @@ RULES
 Always finish by calling the respond tool.`;
 }
 
-export async function answerEnquiry(input: EnquiryInput): Promise<EnquiryOutput> {
-  const model = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5-5";
-  const system = buildEnquiryPrompt(input);
+const MAX_TOOL_ROUNDS = 6;
 
-  // Kill switch check
+export async function answerEnquiry(input: EnquiryInput): Promise<EnquiryOutput> {
   if (!assistantEnabled()) {
-    return fallbackOutput(
-      normaliseLanguage(input.knownLanguage),
-      "AI assistant disabled",
-      "A guest message needs your attention.",
-    );
+    return fallbackOutput(normaliseLanguage(input.knownLanguage), "AI assistant disabled", "A guest message needs your attention.");
   }
 
-  // Budget check before AI call
   try {
     await assertAiBudget(input.ctx.ownerId, new Date());
   } catch (e) {
     if (e instanceof BudgetExceededError) {
-      return fallbackOutput(
-        normaliseLanguage(input.knownLanguage),
-        "Monthly AI budget exceeded",
-        "A guest message needs your attention.",
-      );
+      return fallbackOutput(normaliseLanguage(input.knownLanguage), "Monthly AI budget exceeded", "A guest message needs your attention.");
     }
     throw e;
   }
 
-  for (let call = 0; call < 4; call++) {
-    const forced = call === 3; // the last call must be respond
-    const tools = forced ? [RESPOND_TOOL] : [...dataTools, RESPOND_TOOL];
-    const tool_choice = forced
-      ? { type: "tool" as const, name: "respond" as const }
-      : { type: "any" as const };
+  const model = getGoogleGenAI().getGenerativeModel({
+    model: GEMINI_MODEL,
+    systemInstruction: buildEnquiryPrompt(input),
+    tools: [{ functionDeclarations: [...dataTools, RESPOND_TOOL] as FunctionDeclaration[] }],
+    // Force a function call every turn: the model must either call a data
+    // tool or finish with respond.
+    toolConfig: { functionCallingConfig: { mode: FunctionCallingMode.ANY } },
+  });
 
-    let res;
-    try {
-      res = await client.messages.create({
-        model,
-        max_tokens: 800,
-        system,
-        tools,
-        tool_choice,
-        messages: input.history,
-      });
-    } catch {
-      throw new EnquiryAssistantError("The AI service is unavailable.");
-    }
+  const chat = model.startChat({ history: input.history.slice(0, -1) });
+  const lastPart = input.history[input.history.length - 1]?.parts[0];
+  const currentMessage =
+    lastPart && "text" in lastPart ? (lastPart.text ?? "") : "";
 
-    const usage = {
-      input: res.usage.input_tokens,
-      output: res.usage.output_tokens,
-    };
-    await recordUsage(input.ctx.ownerId, "AI_ENQUIRY", usage);
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+  let res;
 
-    const uses = res.content.filter((block) => block.type === "tool_use");
-    const respond = uses.find((block) => block.name === "respond");
+  try {
+    res = await chat.sendMessage(currentMessage);
+  } catch {
+    throw new EnquiryAssistantError("The AI service is unavailable.");
+  }
+
+  for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+    totalInputTokens += res.response.usageMetadata?.promptTokenCount || 0;
+    totalOutputTokens += res.response.usageMetadata?.candidatesTokenCount || 0;
+
+    const functionCalls = res.response.functionCalls() ?? [];
+    const respond = functionCalls.find((c) => c.name === "respond");
+
     if (respond) {
-      const parsed = outputSchema.safeParse(respond.input);
+      await recordUsage(input.ctx.ownerId, "AI_ENQUIRY", { input: totalInputTokens, output: totalOutputTokens });
+
+      const parsed = outputSchema.safeParse(respond.args);
       if (!parsed.success) throw new EnquiryAssistantError("The AI returned an unusable answer.");
       const o = parsed.data;
 
@@ -202,51 +164,43 @@ export async function answerEnquiry(input: EnquiryInput): Promise<EnquiryOutput>
         reason: o.reason.trim(),
         hostSummary: o.host_summary.trim(),
         optOut: o.opt_out,
-        usage,
+        usage: { input: totalInputTokens, output: totalOutputTokens },
       };
 
-      // Code-level checks
       if (!out.reply || out.reply.length > 1200) {
-        return fallbackOutput(
-          out.language,
-          "The assistant produced an unusable reply.",
-          out.hostSummary || "A guest message needs your attention.",
-        );
+        return fallbackOutput(out.language, "The assistant produced an unusable reply.", out.hostSummary || "A guest message needs your attention.");
       }
       const bad = unsupportedContacts(out.reply, input.allowedText);
       if (bad) {
-        return fallbackOutput(
-          out.language,
-          "Assistant reply blocked: it contained a link or number that is not in your information.",
-          out.hostSummary || "A guest message needs your attention.",
-        );
+        return fallbackOutput(out.language, "Assistant reply blocked: it contained a link or number that is not in your information.", out.hostSummary || "A guest message needs your attention.");
       }
       const badAmount = unsupportedAmounts(out.reply, input.ctx.allowedAmounts);
       if (badAmount) {
-        return fallbackOutput(
-          out.language,
-          "Assistant reply blocked: it quoted a price not from tool results.",
-          out.hostSummary || "A guest message needs your attention.",
-        );
+        return fallbackOutput(out.language, "Assistant reply blocked: it quoted a price not from tool results.", out.hostSummary || "A guest message needs your attention.");
       }
       if (out.urgent) out.escalate = true;
-      
+
       return out;
     }
 
-    if (uses.length === 0 || call + uses.length > 3) break; // unusable: fall back
+    if (functionCalls.length === 0) {
+      throw new EnquiryAssistantError("The AI returned no tool calls.");
+    }
 
-    // Run tools and continue
-    const toolResults = await Promise.all(
-      uses.map(async (u) => ({
-        type: "tool_result" as const,
-        tool_use_id: u.id,
-        content: JSON.stringify(await runTool(u.name, u.input, input.ctx)),
-      })),
+    const functionResponses: Part[] = await Promise.all(
+      functionCalls.map(async (call) => ({
+        functionResponse: {
+          name: call.name,
+          response: JSON.parse(await runTool(call.name, call.args, input.ctx)),
+        },
+      }))
     );
 
-    input.history.push({ role: "assistant", content: res.content });
-    input.history.push({ role: "user", content: toolResults });
+    try {
+      res = await chat.sendMessage(functionResponses);
+    } catch {
+      throw new EnquiryAssistantError("The AI service is unavailable.");
+    }
   }
 
   throw new EnquiryAssistantError("No usable answer");

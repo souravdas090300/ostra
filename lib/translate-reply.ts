@@ -1,8 +1,7 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { getGoogleGenAI, GEMINI_MODEL } from "./llm-client";
 import { getLanguage } from "./languages";
 import { assertAiBudget, recordUsage } from "./usage";
 
-const client = new Anthropic({ timeout: 25_000, maxRetries: 1 });
 export class ReplyTranslationError extends Error {}
 
 const SYSTEM = `You translate a WhatsApp message that a holiday-rental host wants to send to a guest.
@@ -15,31 +14,23 @@ Output only the translation, with no tags, quotes or commentary.`;
 export async function translateText(text: string, from: string, to: string, ownerId: string): Promise<string> {
   const fromName = getLanguage(from)?.name ?? from,
     toName = getLanguage(to)?.name ?? to;
-  
+
   // Budget check before AI call
   await assertAiBudget(ownerId, new Date());
-  
+
   try {
-    const res = await client.messages.create({
-      model: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5-5",
-      max_tokens: 1200,
-      system: SYSTEM,
-      messages: [
-        {
-          role: "user",
-          content: `Translate from ${fromName} to ${toName}.\n<message>${text.slice(0, 1500)}</message>`,
-        },
-      ],
-    });
-    const out = res.content.flatMap((c) => (c.type === "text" ? [c.text] : [])).join("").trim();
+    const res = await getGoogleGenAI()
+      .getGenerativeModel({ model: GEMINI_MODEL, systemInstruction: SYSTEM })
+      .generateContent(`Translate from ${fromName} to ${toName}.\n<message>${text.slice(0, 1500)}</message>`);
+    const out = res.response.text().trim();
     if (!out) throw new Error("empty");
-    
+
     // Record usage after successful AI call
     await recordUsage(ownerId, "AI_TRANSLATE", {
-      input: res.usage.input_tokens,
-      output: res.usage.output_tokens,
+      input: res.response.usageMetadata?.promptTokenCount ?? 0,
+      output: res.response.usageMetadata?.candidatesTokenCount ?? 0,
     });
-    
+
     return out;
   } catch {
     throw new ReplyTranslationError("Could not translate right now. Try again, or write in the guest's language.");

@@ -1,8 +1,6 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { getGoogleGenAI, GEMINI_MODEL } from "./llm-client";
 import { extractVars, validateTemplate } from "./templates";
 import { getLanguage } from "./languages";
-
-const client = new Anthropic();
 
 export class TranslationError extends Error {}
 
@@ -26,21 +24,10 @@ export async function translateTemplate(
   const from = getLanguage(fromLang)?.name ?? fromLang,
     to = getLanguage(toLang)?.name ?? toLang;
   for (let attempt = 0; attempt < 2; attempt++) {
-    const res = await client.messages.create({
-      model: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5-5",
-      max_tokens: 1000,
-      system: SYSTEM,
-      messages: [
-        {
-          role: "user",
-          content: `Translate from ${from} to ${to}.\n<message>${source}</message>`,
-        },
-      ],
-    });
-    const text = res.content
-      .flatMap((c) => (c.type === "text" ? [c.text] : []))
-      .join("")
-      .trim();
+    const res = await getGoogleGenAI()
+      .getGenerativeModel({ model: GEMINI_MODEL, systemInstruction: SYSTEM })
+      .generateContent(`Translate from ${from} to ${to}.\n<message>${source}</message>`);
+    const text = res.response.text().trim();
     const sameVars =
       JSON.stringify(extractVars(text).sort()) === JSON.stringify(extractVars(source).sort());
     if (sameVars && validateTemplate(type, text).length === 0) return text;

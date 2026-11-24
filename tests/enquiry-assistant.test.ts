@@ -12,13 +12,56 @@ import { runTool } from "@/lib/enquiry-tools";
 import { assistantEnabled } from "@/lib/flags";
 import { assertAiBudget, recordUsage, BudgetExceededError } from "@/lib/usage";
 
-const mockMessagesCreate = vi.hoisted(() => vi.fn());
+const geminiMocks = vi.hoisted(() => ({
+  sendMessage: vi.fn(),
+  generateContent: vi.fn(),
+}));
 
-vi.mock("@anthropic-ai/sdk", () => ({
-  default: class {
-    messages = { create: mockMessagesCreate };
+vi.mock("@google/generative-ai", () => ({
+  GoogleGenerativeAI: class {
+    getGenerativeModel() {
+      return {
+        startChat: () => ({ sendMessage: geminiMocks.sendMessage }),
+        generateContent: geminiMocks.generateContent,
+      };
+    }
+  },
+  SchemaType: {
+    STRING: "string",
+    NUMBER: "number",
+    INTEGER: "integer",
+    BOOLEAN: "boolean",
+    ARRAY: "array",
+    OBJECT: "object",
+  },
+  FunctionCallingMode: {
+    MODE_UNSPECIFIED: "MODE_UNSPECIFIED",
+    AUTO: "AUTO",
+    ANY: "ANY",
+    NONE: "NONE",
   },
 }));
+
+const geminiReply = (
+  args: Record<string, unknown>,
+  usage = { promptTokenCount: 10, candidatesTokenCount: 5 }
+) => ({
+  response: {
+    functionCalls: () => [{ name: "respond", args }],
+    usageMetadata: usage,
+  },
+});
+
+const geminiToolCall = (
+  name: string,
+  args: Record<string, unknown>,
+  usage = { promptTokenCount: 10, candidatesTokenCount: 5 }
+) => ({
+  response: {
+    functionCalls: () => [{ name, args }],
+    usageMetadata: usage,
+  },
+});
 vi.mock("@/lib/enquiry-guards");
 vi.mock("@/lib/enquiry-tools");
 vi.mock("@/lib/flags");
@@ -41,7 +84,7 @@ describe("E2 - Enquiry Assistant Loop and Output Checks", () => {
     today: "2026-10-25",
     knownLanguage: "en",
     apartmentNames: ["Apartment A", "Apartment B"],
-    history: [{ role: "user" as const, content: "<guest_message>Is it free 10-12 March for 2 people?</guest_message>" }],
+    history: [{ role: "user" as const, parts: [{ text: "<guest_message>Is it free 10-12 March for 2 people?</guest_message>" }] }],
     allowedText: "Test apartment info",
     ctx: mockCtx,
   };
@@ -56,7 +99,9 @@ describe("E2 - Enquiry Assistant Loop and Output Checks", () => {
   });
 
   describe("buildEnquiryHistory", () => {
-    it("builds alternating user/assistant turns", () => {
+    const text = (c: { parts: { text?: string }[] }) => c.parts[0]?.text ?? "";
+
+    it("builds alternating user/model turns", () => {
       const previous = [
         { direction: "INBOUND" as const, body: "Hello" },
         { direction: "OUTBOUND" as const, body: "Hi there" },
@@ -65,39 +110,39 @@ describe("E2 - Enquiry Assistant Loop and Output Checks", () => {
 
       expect(history).toHaveLength(3);
       expect(history[0].role).toBe("user");
-      expect(history[1].role).toBe("assistant");
+      expect(history[1].role).toBe("model");
       expect(history[2].role).toBe("user");
     });
 
-    it("uses content field (not text) for Anthropic SDK compatibility", () => {
+    it("uses parts for Gemini SDK compatibility", () => {
       const previous = [
         { direction: "INBOUND" as const, body: "Hello" },
         { direction: "OUTBOUND" as const, body: "Hi there" },
       ];
       const history = buildEnquiryHistory(previous, "Is it free?");
-      expect(history.every(m => 'content' in m && !('text' in m))).toBe(true);
+      expect(history.every((m) => Array.isArray(m.parts) && !("content" in m))).toBe(true);
     });
 
     it("wraps guest messages in tags", () => {
       const history = buildEnquiryHistory([], "Hello");
 
-      expect(history[0].content).toContain("<guest_message>");
-      expect(history[0].content).toContain("</guest_message>");
+      expect(text(history[0])).toContain("<guest_message>");
+      expect(text(history[0])).toContain("</guest_message>");
     });
 
-    it("handles assistant-only start", () => {
+    it("handles model-only start", () => {
       const previous = [{ direction: "OUTBOUND" as const, body: "Welcome" }];
       const history = buildEnquiryHistory(previous, "Hello");
 
       expect(history[0].role).toBe("user");
-      expect(history[0].content).toContain("The conversation started with the host's automatic message");
+      expect(text(history[0])).toContain("The conversation started with the host's automatic message");
     });
 
     it("truncates messages to 1000 characters", () => {
       const longMessage = "A".repeat(2000);
       const history = buildEnquiryHistory([], longMessage);
 
-      expect(history[0].content).toHaveLength(
+      expect(text(history[0])).toHaveLength(
         "<guest_message>".length + 1000 + "</guest_message>".length,
       );
     });
@@ -184,22 +229,17 @@ describe("E2 - Enquiry Assistant Loop and Output Checks", () => {
     it("blocks an AI reply containing a disallowed link", async () => {
       vi.mocked(assistantEnabled).mockReturnValue(true);
       vi.mocked(assertAiBudget).mockResolvedValue(undefined);
-      mockMessagesCreate.mockResolvedValue({
-        usage: { input_tokens: 10, output_tokens: 5 },
-        content: [{
-          type: "tool_use",
-          name: "respond",
-          input: {
-            language: "en",
-            reply: "Click here: https://example.com",
-            escalate: false,
-            urgent: false,
-            reason: "",
-            host_summary: "Guest asked for information",
-            opt_out: false,
-          },
-        }],
-      });
+      geminiMocks.sendMessage.mockResolvedValue(
+        geminiReply({
+          language: "en",
+          reply: "Click here: https://example.com",
+          escalate: false,
+          urgent: false,
+          reason: "",
+          host_summary: "Guest asked for information",
+          opt_out: false,
+        })
+      );
 
       const output = await answerEnquiry(mockInput);
 
@@ -210,8 +250,8 @@ describe("E2 - Enquiry Assistant Loop and Output Checks", () => {
         input: 10,
         output: 5,
       });
-      expect(mockMessagesCreate).toHaveBeenCalledWith(
-        expect.objectContaining({ messages: mockInput.history }),
+      expect(geminiMocks.sendMessage).toHaveBeenCalledWith(
+        expect.stringContaining("<guest_message>"),
       );
     });
 
@@ -327,7 +367,7 @@ describe("E2 - Enquiry Assistant Loop and Output Checks", () => {
       expect(output.reason).toBe("AI assistant disabled");
       expect(output.usage.input).toBe(0);
       expect(output.usage.output).toBe(0);
-      expect(mockMessagesCreate).not.toHaveBeenCalled();
+      expect(geminiMocks.sendMessage).not.toHaveBeenCalled();
       expect(assertAiBudget).not.toHaveBeenCalled();
       expect(recordUsage).not.toHaveBeenCalled();
     });
@@ -343,31 +383,24 @@ describe("E2 - Enquiry Assistant Loop and Output Checks", () => {
       expect(output.reason).toBe("Monthly AI budget exceeded");
       expect(output.usage.input).toBe(0);
       expect(output.usage.output).toBe(0);
-      expect(mockMessagesCreate).not.toHaveBeenCalled();
+      expect(geminiMocks.sendMessage).not.toHaveBeenCalled();
       expect(recordUsage).not.toHaveBeenCalled();
     });
 
-    it("records usage for every AI call, including tool rounds", async () => {
+    it("records usage once per enquiry, including tool rounds", async () => {
       vi.mocked(assistantEnabled).mockReturnValue(true);
       vi.mocked(assertAiBudget).mockResolvedValue(undefined);
       vi.mocked(runTool).mockResolvedValue('{"info":"Public information"}');
-      mockMessagesCreate
-        .mockResolvedValueOnce({
-          usage: { input_tokens: 20, output_tokens: 8 },
-          content: [{
-            type: "tool_use",
-            id: "tool-1",
-            name: "get_apartment_info",
-            input: { apartment_name: "Apartment A" },
-          }],
-        })
-        .mockResolvedValueOnce({
-          usage: { input_tokens: 100, output_tokens: 50 },
-          content: [{
-            type: "tool_use",
-            id: "respond-1",
-            name: "respond",
-            input: {
+      geminiMocks.sendMessage
+        .mockResolvedValueOnce(
+          geminiToolCall("get_apartment_info", { apartment_name: "Apartment A" }, {
+            promptTokenCount: 20,
+            candidatesTokenCount: 8,
+          })
+        )
+        .mockResolvedValueOnce(
+          geminiReply(
+            {
               language: "en",
               reply: "Yes, it's available.",
               escalate: false,
@@ -376,20 +409,17 @@ describe("E2 - Enquiry Assistant Loop and Output Checks", () => {
               host_summary: "Guest asked about availability",
               opt_out: false,
             },
-          }],
-        });
+            { promptTokenCount: 100, candidatesTokenCount: 50 }
+          )
+        );
 
       const output = await answerEnquiry(mockInput);
 
       expect(output.reply).toBe("Yes, it's available.");
-      expect(mockMessagesCreate).toHaveBeenCalledTimes(2);
-      expect(recordUsage).toHaveBeenNthCalledWith(1, "owner-1", "AI_ENQUIRY", {
-        input: 20,
-        output: 8,
-      });
-      expect(recordUsage).toHaveBeenNthCalledWith(2, "owner-1", "AI_ENQUIRY", {
-        input: 100,
-        output: 50,
+      expect(geminiMocks.sendMessage).toHaveBeenCalledTimes(2);
+      expect(recordUsage).toHaveBeenCalledWith("owner-1", "AI_ENQUIRY", {
+        input: 120,
+        output: 58,
       });
     });
 
@@ -401,7 +431,7 @@ describe("E2 - Enquiry Assistant Loop and Output Checks", () => {
 
       expect(output.escalate).toBe(true);
       expect(output.reason).toBe("Monthly AI budget exceeded");
-      expect(mockMessagesCreate).not.toHaveBeenCalled();
+      expect(geminiMocks.sendMessage).not.toHaveBeenCalled();
     });
 
     it("should not call AI when kill switch is off", async () => {
@@ -411,7 +441,7 @@ describe("E2 - Enquiry Assistant Loop and Output Checks", () => {
 
       expect(output.escalate).toBe(true);
       expect(output.reason).toBe("AI assistant disabled");
-      expect(mockMessagesCreate).not.toHaveBeenCalled();
+      expect(geminiMocks.sendMessage).not.toHaveBeenCalled();
     });
   });
 });
