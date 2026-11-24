@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { SchemaType, FunctionCallingMode, type FunctionDeclaration } from "@google/generative-ai";
 import { z } from "zod";
 import { prisma } from "./db";
 import { assertAiBudget, recordUsage } from "./usage";
@@ -6,20 +6,19 @@ import { scrub } from "./scrub";
 import { unsupportedContacts } from "./guards";
 import { normaliseLanguage } from "./languages";
 import { log } from "./log";
+import { getGoogleGenAI, GEMINI_MODEL } from "./llm-client";
 
-const anthropic = new Anthropic({ timeout: 25_000, maxRetries: 1 });
-
-const DRAFT_TOOL = {
+const DRAFT_TOOL: FunctionDeclaration = {
   name: "draft",
   description: "Return the draft public reply to the review.",
-  input_schema: {
-    type: "object" as const,
+  parameters: {
+    type: SchemaType.OBJECT,
     properties: {
-      language: { type: "string", description: "ISO 639-1 code of the language of the reply." },
-      reply: { type: "string", description: "The public reply, in the review's language." },
-      host_translation: { type: "string", description: "The same reply translated into the host's language." },
-      risk: { type: "string", enum: ["none", "sensitive", "legal_or_safety"] },
-      risk_note: { type: "string", description: "One sentence in the host's language explaining the risk, empty if none." },
+      language: { type: SchemaType.STRING, description: "ISO 639-1 code of the language of the reply." },
+      reply: { type: SchemaType.STRING, description: "The public reply, in the review's language." },
+      host_translation: { type: SchemaType.STRING, description: "The same reply translated into the host's language." },
+      risk: { type: SchemaType.STRING, description: "Risk classification: none, sensitive or legal_or_safety." },
+      risk_note: { type: SchemaType.STRING, description: "One sentence in the host's language explaining the risk, empty if none." },
     },
     required: ["language", "reply", "host_translation", "risk", "risk_note"],
   },
@@ -129,21 +128,25 @@ export async function draftReviewReply(params: {
   const userMessage = buildUserMessage(review);
 
   try {
-    const msg = await anthropic.messages.create({
-      model: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5-5",
-      max_tokens: 2000,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userMessage }],
-      tool_choice: { type: "tool", name: "draft" },
-      tools: [DRAFT_TOOL],
+    const model = getGoogleGenAI().getGenerativeModel({
+      model: GEMINI_MODEL,
+      systemInstruction: systemPrompt,
+      tools: [{ functionDeclarations: [DRAFT_TOOL] }],
+      toolConfig: {
+        functionCallingConfig: {
+          mode: FunctionCallingMode.ANY,
+          allowedFunctionNames: ["draft"],
+        },
+      },
     });
+    const msg = await model.generateContent(userMessage);
 
-    const toolUse = msg.content.find((c) => c.type === "tool_use" && c.name === "draft");
-    if (!toolUse || toolUse.type !== "tool_use") {
+    const toolCall = msg.response.functionCalls()?.find((c) => c.name === "draft");
+    if (!toolCall) {
       return { success: false, error: "Failed to generate draft" };
     }
 
-    const parsed = draftSchema.safeParse(toolUse.input);
+    const parsed = draftSchema.safeParse(toolCall.args);
     if (!parsed.success) {
       return { success: false, error: "Invalid draft format" };
     }
@@ -187,8 +190,8 @@ export async function draftReviewReply(params: {
 
     // Record usage
     await recordUsage(ownerId, "AI_REPLY", {
-      input: msg.usage.input_tokens,
-      output: msg.usage.output_tokens,
+      input: msg.response.usageMetadata?.promptTokenCount ?? 0,
+      output: msg.response.usageMetadata?.candidatesTokenCount ?? 0,
     });
 
     // Log only scrubbed data
@@ -257,17 +260,13 @@ function buildUserMessage(review: string): string {
 
 async function shortenDraft(text: string, maxChars: number, hostLanguage: string, replyLanguage: string): Promise<string> {
   try {
-    const msg = await anthropic.messages.create({
-      model: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5-5",
-      max_tokens: 1000,
-      system: `Shorten the following ${replyLanguage} text to at most ${maxChars} characters while keeping the key message and tone. Preserve the meaning and professional tone. Do not add new information.`,
-      messages: [{ role: "user", content: text }],
-    });
-    const result = msg.content[0];
-    if (result.type === "text") {
-      return result.text;
-    }
-    return text;
+    const res = await getGoogleGenAI()
+      .getGenerativeModel({
+        model: GEMINI_MODEL,
+        systemInstruction: `Shorten the following ${replyLanguage} text to at most ${maxChars} characters while keeping the key message and tone. Preserve the meaning and professional tone. Do not add new information.`,
+      })
+      .generateContent(text);
+    return res.response.text() || text;
   } catch {
     return text;
   }
