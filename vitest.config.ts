@@ -17,6 +17,7 @@ export default defineConfig(() => {
       environment: "node",
       fileParallelism: false,
       env: testEnv,
+      globalSetup: "./tests/global-setup.ts",
     },
     resolve: {
       alias: {
