@@ -1,3 +1,5 @@
+"use client";
+
 type UnresolvedMessage = {
   id: string;
   urgent?: boolean;

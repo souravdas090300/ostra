@@ -1,3 +1,5 @@
+"use client";
+
 import { MessageFeedback } from "./MessageFeedback";
 
 type Message = {

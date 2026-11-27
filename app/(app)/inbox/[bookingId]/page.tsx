@@ -46,18 +46,14 @@ export default async function ThreadPage({ params }: { params: Promise<{ booking
 
       <AttentionBanner
         unresolved={unresolved}
-        onResolve={async () => {
-          await resolveConversation(booking.id);
-        }}
+        onResolve={resolveConversation.bind(null, booking.id)}
       />
 
       <ReplyWindowBanner lastGuestAt={lastGuestAt} now={now} />
 
       <MessageList
         messages={messages}
-        onReopen={async (messageId) => {
-          await reopenMessage(messageId);
-        }}
+        onReopen={reopenMessage}
         showFeedback={true}
       />
 

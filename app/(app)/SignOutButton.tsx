@@ -1,11 +1,11 @@
 "use client";
 
-import { signOut } from "@/lib/client-auth";
+import { signOutAction } from "./sign-out";
 
 export default function SignOutButton() {
   return (
     <button
-      onClick={() => signOut()}
+      onClick={() => signOutAction()}
       className="text-sm text-gray-500 hover:text-gray-700"
     >
       Sign out

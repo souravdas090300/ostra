@@ -20,6 +20,7 @@ model Owner {
   whatsappPhoneNumberId String?    @unique
   retentionDays       Int         @default(90)
   passwordChangedAt   DateTime?
+  sessionVersion      Int         @default(0)
   monthlyAiBudgetCents Int        @default(1500)
   monthlyTemplateCap  Int         @default(1000)
   waTemplateCost      String      @default("0")

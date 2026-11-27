@@ -8,7 +8,7 @@ import {
   confirmExport,
   regenerateExportToken,
 } from "@/app/(app)/apartments/export-actions";
-import { linkState, type LinkState } from "@/lib/export-feeds";
+import { linkState, type LinkState } from "@/lib/export-feed-state";
 import { timeAgo } from "@/lib/dates";
 
 type ExportFeed = {
