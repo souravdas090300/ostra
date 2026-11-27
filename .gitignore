@@ -63,3 +63,7 @@ secrets.*
 # Disposable local test Postgres cluster (never commit)
 .pgtest-data/
 .pgtest.log
+
+# Playwright
+test-results/
+playwright-report/

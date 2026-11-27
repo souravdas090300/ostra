@@ -36,21 +36,35 @@ export function BookingForm({
   defaultGuestLanguageName,
   submitLabel,
 }: Props) {
-  const [state, formAction, pending] = useActionState(action, undefined);
+  // React resets form fields after a server action; selects and checkboxes do
+  // not recover their values, so remount the form DOM after each submission.
+  // Component state (useState/useActionState) survives the remount.
+  const [run, setRun] = useState(0);
+  const [state, formAction, pending] = useActionState(
+    async (prev: BookingFormState, fd: FormData) => {
+      const result = await action(prev, fd);
+      setRun((r) => r + 1);
+      return result;
+    },
+    undefined,
+  );
   const v = (k: keyof BookingValues) => state?.submitted?.[k] ?? values[k]; // keep input after a failed submit
   const fieldErrors = state?.fieldErrors ?? {};
   const [phone, setPhone] = useState(v("guestPhone"));
   const [language, setLanguage] = useState(v("guestLanguage"));
+  // Controlled: React resets uncontrolled fields after an action, which would
+  // clear the apartment on the "Save anyway" resubmit.
+  const [apartmentId, setApartmentId] = useState(values.apartmentId);
   const suggestion = phone && !language ? suggestLanguageFromPhone(phone) : null;
   const err = (k: string) => fieldErrors[k]?.map((m: string) => <p key={m} className="text-sm text-red-600">{m}</p>);
   const phoneOptedOut = fieldErrors["guestPhone"]?.some((m: string) => m.includes("opted out"));
 
   return (
-    <form action={formAction} className="max-w-xl space-y-4">
+    <form key={run} action={formAction} className="max-w-xl space-y-4">
       {mode === "create" && (
         <label className="block">
           <span className="text-sm font-medium">Apartment</span>
-          <select name="apartmentId" defaultValue={v("apartmentId")} className="mt-1 w-full rounded-md border px-3 py-2">
+          <select name="apartmentId" value={apartmentId} onChange={(ev) => setApartmentId(ev.target.value)} className="mt-1 w-full rounded-md border px-3 py-2">
             <option value="">Choose...</option>
             {apartments?.map((a) => (
               <option key={a.id} value={a.id}>

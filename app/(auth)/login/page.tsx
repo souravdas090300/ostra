@@ -1,4 +1,6 @@
 import { signIn } from "@/lib/auth";
+import { CredentialsSignin } from "next-auth";
+import { redirect } from "next/navigation";
 
 export default async function LoginPage({
   searchParams,
@@ -21,9 +23,15 @@ export default async function LoginPage({
         <form
           action={async (formData) => {
             "use server";
-            await signIn("credentials", formData, {
-              redirectTo: "/calendar",
-            });
+            formData.set("redirectTo", "/calendar");
+            try {
+              await signIn("credentials", formData);
+            } catch (error) {
+              if (error instanceof CredentialsSignin) {
+                redirect("/login?error=CredentialsSignin");
+              }
+              throw error;
+            }
           }}
           className="mt-8 space-y-6"
         >

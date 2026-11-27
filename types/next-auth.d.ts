@@ -9,6 +9,8 @@ declare module "next-auth" {
       hostLanguage: string;
       defaultGuestLanguage: string;
       iat?: number;
+      pwdStamp?: string | null;
+      sv?: number;
     } & DefaultSession["user"];
   }
 
@@ -17,6 +19,8 @@ declare module "next-auth" {
     email: string;
     hostLanguage: string;
     defaultGuestLanguage: string;
+    pwdStamp?: string | null;
+    sessionVersion?: number;
   }
 }
 
@@ -26,6 +30,9 @@ declare module "next-auth/jwt" {
     hostLanguage?: string;
     defaultGuestLanguage?: string;
     iat?: number;
+    pwdStamp?: string | null;
+    ownerId?: string;
+    sv?: number;
   }
 }
 

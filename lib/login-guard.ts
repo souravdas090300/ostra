@@ -1,7 +1,25 @@
-import { createHmac } from "node:crypto";
 import { prisma } from "./db";
 
-const hmac = (v: string) => createHmac("sha256", process.env.DATA_PEPPER || "default-pepper").update(v.trim().toLowerCase()).digest("hex");
+// WebCrypto (not node:crypto) so this module stays Edge-safe: auth.config is
+// bundled into middleware.ts, which runs on the Edge runtime.
+const encoder = new TextEncoder();
+
+async function hmac(v: string): Promise<string> {
+  const pepper = process.env.DATA_PEPPER || "default-pepper";
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(pepper),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    encoder.encode(v.trim().toLowerCase()),
+  );
+  return Array.from(new Uint8Array(sig), (b) => b.toString(16).padStart(2, "0")).join("");
+}
 
 export function clientIp(headers: Headers): string {
   if (process.env.TRUST_PROXY === "1") {
@@ -12,17 +30,18 @@ export function clientIp(headers: Headers): string {
 }
 
 export async function isLockedOut(email: string, ip: string, now = new Date()): Promise<boolean> {
+  const [emailHash, ipHash] = await Promise.all([hmac(email), hmac(ip)]);
   const [byEmail, byIp] = await Promise.all([
     prisma.loginAttempt.count({
       where: {
-        emailHash: hmac(email),
+        emailHash,
         success: false,
         createdAt: { gte: new Date(now.getTime() - 15 * 60_000) },
       },
     }),
     prisma.loginAttempt.count({
       where: {
-        ipHash: hmac(ip),
+        ipHash,
         success: false,
         createdAt: { gte: new Date(now.getTime() - 60 * 60_000) },
       },
@@ -34,8 +53,8 @@ export async function isLockedOut(email: string, ip: string, now = new Date()): 
 export async function recordAttempt(email: string, ip: string, success: boolean) {
   await prisma.loginAttempt.create({
     data: {
-      emailHash: hmac(email),
-      ipHash: hmac(ip),
+      emailHash: await hmac(email),
+      ipHash: await hmac(ip),
       success,
     },
   });

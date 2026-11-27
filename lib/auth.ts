@@ -20,6 +20,17 @@ export async function requireOwner(): Promise<SessionOwner> {
   if (!id) redirect("/login");
   const owner = await prisma.owner.findUnique({ where: { id } });
   if (!owner) redirect("/login");
+  // Reject sessions issued before the last password change or sign-out.
+  if (
+    owner.passwordChangedAt &&
+    (!session.user.pwdStamp ||
+      new Date(session.user.pwdStamp).getTime() < owner.passwordChangedAt.getTime())
+  ) {
+    redirect("/login");
+  }
+  // In-flight session refreshes can mint a fresh JWT after sign-out; the
+  // sessionVersion bump on sign-out makes those stale tokens fail here.
+  if ((session.user.sv ?? 0) !== owner.sessionVersion) redirect("/login");
   const { passwordHash: _omit, ...safe } = owner;
   return safe;
 }

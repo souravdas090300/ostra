@@ -89,3 +89,66 @@ jobs:
             echo "$MATCHES"
             exit 1
           fi
+
+  e2e:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://ostra:ostra_test_password@localhost:5432/ostra_test
+      AUTH_SECRET: ci-e2e-auth-secret
+      APP_URL: http://localhost:3100
+      CRON_SECRET: ci-e2e-cron-secret
+      GEMINI_API_KEY: ci-fake-gemini-key
+      LLM_FAKE: "1"
+      WHATSAPP_MODE: dry-run
+      E2E: "1"
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ostra
+          POSTGRES_PASSWORD: ostra_test_password
+          POSTGRES_DB: ostra_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ostra -d ostra_test"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Prepare test database
+        run: npx prisma migrate deploy
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Build
+        run: npm run build
+
+      - name: Run Playwright E2E tests
+        run: npx playwright test
+
+      - name: Upload Playwright report and traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

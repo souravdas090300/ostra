@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 import path from "path";
 import { loadEnv } from "vite";
 import { assertSafeTestDatabaseUrl } from "./lib/test-database-guard";
@@ -17,6 +17,7 @@ export default defineConfig(() => {
       environment: "node",
       fileParallelism: false,
       env: testEnv,
+      exclude: [...configDefaults.exclude, "e2e/**"],
     },
     resolve: {
       alias: {

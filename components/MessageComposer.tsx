@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { getLanguage } from "@/lib/languages";
 
 export type PreviewState = {
@@ -9,7 +10,7 @@ export type PreviewState = {
   warnings?: string[];
 };
 
-type ComposerActions = {
+export type ComposerActions = {
   preview: (text: string) => Promise<{ error?: string } & PreviewState>;
   recheck: (translation: string, original: string) => Promise<{ error?: string } & PreviewState>;
   send: (toSend: string, original: string, markResolved: boolean) => Promise<{ error?: string }>;
@@ -50,6 +51,7 @@ export function MessageComposer({
   const [saveText, setSaveText] = useState("");
   const [saveTarget, setSaveTarget] = useState<"info" | "publicInfo">("info");
   const [saveError, setSaveError] = useState<string | null>(null);
+  const router = useRouter();
 
   const hostLangName = getLanguage(hostLanguage)?.name ?? hostLanguage;
   const guestLangName = getLanguage(guestLanguage)?.name ?? guestLanguage;
@@ -96,6 +98,7 @@ export function MessageComposer({
       setText("");
       setPreview(null);
       setChecked(false);
+      router.refresh();
       if (markResolved && hasUnresolved && suggestedQuestion && showSaveToInfo) {
         setShowSave(true);
         setSaveText(`Q: ${suggestedQuestion}\nA: ${text}`);
